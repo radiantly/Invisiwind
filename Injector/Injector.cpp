@@ -3,8 +3,9 @@
 
 #include <iostream>
 #include <string>
-#include <vector>
+#include <unordered_set>
 #include <Windows.h>
+#include <TlHelp32.h>
 
 using std::cout;
 using std::cerr;
@@ -33,6 +34,32 @@ bool FileExists(LPCWSTR szPath)
 		!(dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
 }
 
+int savePIDsFromProcName(std::unordered_set<int>& pids, std::wstring& searchTerm) {
+	int found = 0;
+	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (hSnapshot) {
+		PROCESSENTRY32 pe32;
+		pe32.dwSize = sizeof(PROCESSENTRY32);
+		if (Process32First(hSnapshot, &pe32)) {
+			do {
+				if (searchTerm == pe32.szExeFile) {
+					found++;
+					pids.insert(pe32.th32ProcessID);
+				}
+			} while (Process32Next(hSnapshot, &pe32));
+		}
+		CloseHandle(hSnapshot);
+	}
+	return found;
+}
+
+bool isValidPID(std::wstring& arg) {
+	for (auto& c: arg)
+		if (!isdigit(c))
+			return false;
+	return true;
+}
+
 // LP  - Pointer
 // C   - Constant
 // T   - TCHAR (or W - WCHAR)
@@ -40,10 +67,14 @@ bool FileExists(LPCWSTR szPath)
 
 int wmain(int argc, wchar_t* argv[], wchar_t* envp[])
 {
-	std::vector<int> pids;
+	std::unordered_set<int> pids;
 	if (argc > 1) {
 		for (int i = 1; i < argc; i++) {
-			pids.push_back(_wtoi(argv[i]));
+			std::wstring arg = argv[i];
+			if (isValidPID(arg))
+				pids.insert(_wtoi(argv[i]));
+			else if (!savePIDsFromProcName(pids, arg))
+				std::wcerr << L"No process found with the name " << arg << endl;
 		}
 	}
 

@@ -24,7 +24,7 @@
     <ProjectGuid>{781c8a65-1020-481d-9448-f69ee1d370f4}</ProjectGuid>
     <RootNamespace>Injector</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>Windoer</ProjectName>
+    <ProjectName>Invisiwind</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
