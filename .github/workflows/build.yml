@@ -14,10 +14,15 @@ jobs:
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v1.0.2
 
-    - name: Build and Publish Web App
-      run: msbuild Invisiwind.sln /p:Configuration=Release
+    - name: Build Project
+      run: |
+        msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x64
+        msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=Win32
     
     - uses: actions/upload-artifact@v2
       with:
         name: build
-        path: Build/bin/Release
+        path: |
+          Build/bin/Release/*.exe
+          Build/bin/Release/*.dll
+          hide.ahk
