@@ -1,0 +1,23 @@
+name: Build App
+ 
+on: [push]
+ 
+jobs:
+  build:
+ 
+    runs-on: windows-latest
+ 
+    steps:
+    - uses: actions/checkout@v2
+      name: Checkout Code
+     
+    - name: Add msbuild to PATH
+      uses: microsoft/setup-msbuild@v1.0.2
+
+    - name: Build and Publish Web App
+      run: msbuild Invisiwind.sln /p:Configuration=Release
+    
+    - uses: actions/upload-artifact@v2
+      with:
+        name: build
+        path: Build/bin/Release
