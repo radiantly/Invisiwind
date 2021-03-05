@@ -17,7 +17,7 @@ jobs:
     - name: Build Project
       run: |
         msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x64
-        msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=Win32
+        msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x86
     
     - uses: actions/upload-artifact@v2
       with:
