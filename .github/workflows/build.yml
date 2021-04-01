@@ -19,10 +19,13 @@ jobs:
         msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x64
         msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x86
     
+    - name: Copy AHK script to release
+      run: COPY hide.ahk Build/bin/Release
+    
     - uses: actions/upload-artifact@v2
       with:
         name: build
         path: |
           Build/bin/Release/*.exe
           Build/bin/Release/*.dll
-          hide.ahk
+          Build/bin/Release/hide.ahk

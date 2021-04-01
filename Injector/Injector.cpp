@@ -6,24 +6,47 @@
 #include <string>
 #include <map>
 #include <unordered_set>
+#include <algorithm>
 #include <Windows.h>
 #include <TlHelp32.h>
+#include <AclAPI.h>
 
 using std::cout;
 using std::cerr;
 using std::endl;
 
 #ifdef _WIN64
-const bool iAm64bit = true;
+const auto iAm64bit = true;
+const auto hideDllName = L"./Hide.dll";
+const auto unhideDllName = L"./Unhide.dll";
 #else
-const bool iAm64bit = false;
+const auto iAm64bit = false;
+const auto hideDllName = L"./Hide_32bit.dll";
+const auto unhideDllName = L"./Unhide_32bit.dll";
 #endif
 
-const std::string title = "  _____            _     _          _           _ \n\
-  \\_   \\_ ____   _(_)___(_)_      _(_)_ __   __| |\n\
-   / /\\/ '_ \\ \\ / / / __| \\ \\ /\\ / / | '_ \\ / _` |\n\
-/\\/ /_ | | | \\ V /| \\__ \\ |\\ V  V /| | | | | (_| |\n\
-\\____/ |_| |_|\\_/ |_|___/_| \\_/\\_/ |_|_| |_|\\__,_|";
+const std::string title{ "  _____            _     _          _           _ \n"
+"  \\_   \\_ ____   _(_)___(_)_      _(_)_ __   __| |\n"
+"   / /\\/ '_ \\ \\ / / / __| \\ \\ /\\ / / | '_ \\ / _` |\n"
+"/\\/ /_ | | | \\ V /| \\__ \\ |\\ V  V /| | | | | (_| |\n"
+"\\____/ |_| |_|\\_/ |_|___/_| \\_/\\_/ |_|_| |_|\\__,_|" };
+
+void showHelp(const wchar_t* argZero) {
+	std::wcout << "Invisiwind - Hide certain windows from screenshares.\n"
+		"\n"
+		"Usage: " << argZero << " [--hide | --unhide] PID_OR_PROCESS_NAME ...\n"
+		"\n"
+		"  -h, --hide      Hide the specified applications. This is default.\n"
+		"  -u, --unhide    Unhide the applications specified.\n"
+		"      --help      Show this help menu.\n"
+		"\n"
+		"  PID_OR_PROCESS_NAME The process id or the process name to hide.\n"
+		"\n"
+		"Examples:\n"
+		<< argZero << " 89203\n"
+		<< argZero << " firefox.exe\n"
+		<< argZero << " --unhide discord.exe obs64.exe\n";
+}
 
 // Most functions have two types - A (ANSI - old) and W (Unicode - new)
 
@@ -42,23 +65,23 @@ bool FileExists(LPCWSTR szPath)
 		!(dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-int savePIDsFromProcName(std::unordered_set<int>& pids, std::wstring& searchTerm) {
-	int found = 0;
+std::unordered_set<int> getPIDsFromProcName(std::wstring& searchTerm) {
+	std::unordered_set<int> pids;
 	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 	if (hSnapshot) {
-		PROCESSENTRY32 pe32;
+		PROCESSENTRY32 pe32{};
 		pe32.dwSize = sizeof(PROCESSENTRY32);
 		if (Process32First(hSnapshot, &pe32)) {
 			do {
-				if (searchTerm == pe32.szExeFile) {
-					found++;
+				std::wstring exeFile{ pe32.szExeFile };
+				std::transform(exeFile.begin(), exeFile.end(), exeFile.begin(), ::towlower);
+				if (searchTerm == exeFile)
 					pids.insert(pe32.th32ProcessID);
-				}
 			} while (Process32Next(hSnapshot, &pe32));
 		}
 		CloseHandle(hSnapshot);
 	}
-	return found;
+	return pids;
 }
 
 std::map<std::wstring, std::unordered_set<int>> getProcList() {
@@ -90,31 +113,36 @@ bool isValidPID(std::wstring& arg) {
 // T   - TCHAR (or W - WCHAR)
 // STR - String
 
+
 int wmain(int argc, wchar_t* argv[], wchar_t* envp[])
 {
-	// Check if DLL exists and then store path
-	TCHAR dllFullPath[256];
-	auto dllName = iAm64bit ? L"./Payload.dll" : L"./Payload_32bit.dll";
-	// DWORD GetFullPathNameW(
-	// 	LPCWSTR lpFileName,    - Relative path
-	// 	DWORD   nBufferLength, - Buffer size
-	// 	LPWSTR  lpBuffer,      - Buffer
-	// 	LPWSTR *lpFilePart     - Pointer to the filename part
-	// );
-	GetFullPathName(dllName, 256, dllFullPath, NULL);
+	auto getDllFullPath = [](const wchar_t* dllName) -> wchar_t* {
+		wchar_t dllFullPath[1024];
+		// DWORD GetFullPathNameW(
+		// 	LPCWSTR lpFileName,    - Relative path
+		// 	DWORD   nBufferLength, - Buffer size
+		// 	LPWSTR  lpBuffer,      - Buffer
+		// 	LPWSTR *lpFilePart     - Pointer to the filename part
+		// );
+		GetFullPathName(dllName, 256, dllFullPath, NULL);
+		if (!FileExists(dllFullPath)) {
+			std::wcerr << dllName << " not found.";
+			return nullptr;
+		}
+		return dllFullPath;
+	};
 
-	if (!FileExists(dllFullPath)) {
-		std::wcerr << dllName << " not found.";
-		return 1;
-	}
-	size_t dllPathLen = (wcslen(dllFullPath) + 1) * sizeof(TCHAR);
+	// Check if DLL exists and then store path
+	wchar_t *hideDllPath{ getDllFullPath(hideDllName) }, *unhideDllPath{ getDllFullPath(unhideDllName) };
 
 	// Check if 32-bit version of the executable exists
 	TCHAR x86binPath[256];
 	GetFullPathName(L"./Invisiwind_32bit.exe", 256, x86binPath, NULL);
 	bool x86verExists = FileExists(x86binPath);
 
-	auto inject = [&](DWORD pid) -> void {
+	auto inject = [&](DWORD pid, wchar_t* dllFullPath) -> void {
+		if (!dllFullPath) return;
+		size_t dllPathLen = (wcslen(dllFullPath) + 1) * sizeof(TCHAR);
 		// HANDLE OpenProcess(
 		// 	DWORD dwDesiredAccess,
 		// 	BOOL  bInheritHandle,       - Whether child processes should inherit this handle
@@ -213,25 +241,47 @@ int wmain(int argc, wchar_t* argv[], wchar_t* envp[])
 	};
 
 	if (argc > 1) {
+		bool hide = true;
+		wchar_t* dllPath{};
 		std::unordered_set<int> pids;
 		for (int i = 1; i < argc; i++) {
-			std::wstring arg = argv[i];
-			if (isValidPID(arg))
-				pids.insert(_wtoi(argv[i]));
-			else if (!savePIDsFromProcName(pids, arg))
-				std::wcerr << L"No process found with the name " << arg << endl;
+			std::wstring arg{ argv[i] };
+			std::transform(arg.begin(), arg.end(), arg.begin(), ::towlower);
+			if ((arg == L"-h" and argc == 2) or arg == L"--help" or arg == L"/?") {
+				showHelp(argv[0]);
+				return 0;
+			}
+			else if (arg == L"-h" or arg == L"--hide") {
+				hide = true;
+			}
+			else if (arg == L"-u" or arg == L"--unhide") {
+				hide = false;
+			}
+			else if (isValidPID(arg)) {
+				inject(_wtoi(argv[i]), hide ? hideDllPath : unhideDllPath);
+			}
+			else {
+				auto pids = getPIDsFromProcName(arg);
+
+				// If we find no results, append .exe and try again
+				if (pids.empty()) pids = getPIDsFromProcName(arg.append(L".exe"));
+
+				if (pids.empty())
+					std::wcerr << L"No process found with the name " << argv[i] << endl;
+				for (auto& pid : pids)
+					inject(pid, hide ? hideDllPath : unhideDllPath);
+			}
 		}
-		for (auto& pid : pids)
-			inject(pid);
 		return 0;
 	}
 
 	// Interactive mode
 	std::cout << title << endl;
 	std::cout << "Hey I'm Invisiwind, here to make windows invisible to everyone but you ^_^" << endl;
-	std::cout << "\nEnter a process name or PID. Type `list` to see all processes" << endl;
+	std::cout << "Type `help` to get started." << endl;
+
 	int enterPressed{};
-	while(true) {
+	while (true) {
 		std::wstring input;
 		cout << "> ";
 		getline(std::wcin, input);
@@ -244,30 +294,60 @@ int wmain(int argc, wchar_t* argv[], wchar_t* envp[])
 		}
 		else {
 			enterPressed = 0;
-			if (input == L"list" or input == L"`list`") {
+
+			auto delimPos = input.find(L" ");
+			std::wstring command = input.substr(0, delimPos);
+
+			if (command == L"help" or command == L"`help`") {
+				std::cout << "Available commands: \n"
+					"\n"
+					"  hide PROCESS_ID_OR_NAME       Hides the specified application\n"
+					"  unhide PROCESS_ID_OR_NAME     Unhides the specified application\n"
+					"  list                          Lists all applications\n"
+					"  help                          Shows this help menu\n"
+					"  exit                          Exit\n"
+					"\n"
+					"Examples:\n"
+					"hide notepad.exe\n"
+					"list\n"
+					"unhide discord.exe\n";
+			}
+			else if (command == L"list") {
 				std::wcout << std::setw(35) << std::left << "Process name" << "PID" << endl;
 				for (auto& [pName, pIDs] : getProcList()) {
 					std::wcout << std::setw(35) << std::left << pName;
 					for (auto& pID : pIDs) std::cout << pID << " ";
 					cout << endl;
 				}
-				cout << "\nEnter a process name or PID:" << endl;
-				continue;
 			}
+			else if (command == L"hide" or command == L"unhide") {
+				if (delimPos == std::wstring::npos) {
+					std::wcout << "Usage: " << command << " PROCESS_ID_OR_NAME\n";
+					continue;
+				}
+				std::wstring arg = input.substr(delimPos + 1);
+				if (isValidPID(arg)) {
+					inject(stoi(arg), command == L"hide" ? hideDllPath : unhideDllPath);
+				}
+				else {
+					auto pids = getPIDsFromProcName(arg);
 
-			if (isValidPID(input)) {
-				inject(stoi(input));
-				continue;
+					// If we find no results, append .exe and try again
+					if (pids.empty()) pids = getPIDsFromProcName(arg.append(L".exe"));
+
+					if (pids.empty())
+						std::wcerr << L"No process found with the name " << input.substr(delimPos + 1) << endl;
+					for (auto& pid : pids)
+						inject(pid, command == L"hide" ? hideDllPath : unhideDllPath);
+				}
 			}
-
-			std::unordered_set<int> pids;
-			if (savePIDsFromProcName(pids, input)) {
-				for (auto& pid : pids)
-					inject(pid);
-				continue;
+			else if (command == L"exit" or command == L"quit") {
+				cout << "Exiting .. have a good day!\n";
+				return 0;
 			}
-
-			cout << "Matching process not found." << endl;
+			else {
+				cout << "Invalid command. Type `help` for help." << endl;
+			}
 		}
 	}
 

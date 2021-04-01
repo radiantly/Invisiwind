@@ -5,7 +5,7 @@ void setDAForWindows() {
 	HWND windowHandle = NULL;
 	do {
 		windowHandle = FindWindowEx(NULL, windowHandle, NULL, NULL);
-		SetWindowDisplayAffinity(windowHandle, WDA_EXCLUDEFROMCAPTURE);
+		SetWindowDisplayAffinity(windowHandle, WDA_NONE);
 	} while (windowHandle);
 }
 
@@ -18,6 +18,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	{
 	case DLL_PROCESS_ATTACH:
 		setDAForWindows();
+		break;
 	case DLL_THREAD_ATTACH:
 	case DLL_THREAD_DETACH:
 	case DLL_PROCESS_DETACH:
