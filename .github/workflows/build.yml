@@ -20,7 +20,9 @@ jobs:
         msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x86
     
     - name: Generate zip bundle
-      run: 7z a -tzip Invisiwind.zip hide.ahk Build\bin\Release\*.dll Build\bin\Release\*.exe
+      run: |
+        COPY hide.ahk Build\bin\Release
+        7z a -tzip Invisiwind.zip Build\bin\Release\hide.ahk Build\bin\Release\*.dll Build\bin\Release\*.exe
 
     - uses: marvinpinto/action-automatic-releases@latest
       with:
