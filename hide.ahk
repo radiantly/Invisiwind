@@ -5,5 +5,5 @@ if FileExist(".\Build\bin\Release\Invisiwind.exe")
 ; When CTRL + J is pressed
 ^j::
 WinGet, pid, PID, A
-Run Invisiwind.exe %pid%,, Hide
+Run Invisiwind.exe --hide %pid%,, Hide
 return
