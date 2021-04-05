@@ -1,6 +1,6 @@
 # Invisiwind
 
-Invisiwind (short for *Invisible Window*) is an application that allows you to hide certain windows when sharing your full screen.
+Invisiwind (short for _Invisible Window_) is an application that allows you to hide certain windows when sharing your full screen.
 
 ## So .. what does it do exactly?
 
@@ -15,7 +15,7 @@ The screenshot on the left is what I see. The one on the right is what everyone 
 
 Using this tool, firefox and slack have been hidden so anyone watching the screenshare is unable to see those windows. However, I can continue to use them as usual on my side.
 
-*Note: this tool works with any app (MS Teams, Discord, OBS, etc) and not just Zoom.*
+_Note: this tool works with any app (MS Teams, Discord, OBS, etc) and not just Zoom._
 
 ### So .. what does it do exactly? (for technical people)
 
@@ -23,10 +23,10 @@ Simple: The tool performs dll injection to [SetWindowDisplayAffinity](https://do
 
 ## How do I use it?
 
-![usage](./demo/open.gif)
+- Download and extract the generated zip bundle from [here](https://github.com/radiantly/Invisiwind/releases/download/latest/Invisiwind.zip).
+- Run `Invisiwind.exe`. You will now be dropped into a terminal.
 
- - Download and extract the generated zip bundle from [here](https://github.com/radiantly/Invisiwind/releases/download/latest/Invisiwind.zip).
- - Run `Invisiwind.exe`. You will now be dropped into a terminal.
+![usage](./demo/open.gif)
 
 Running it directly drops you into interactive mode. You can type `help` for more information.
 
@@ -40,7 +40,7 @@ You will need the Microsoft Visual C++ Redistributable for Visual Studio 2019. Y
 
 #### What OSes are supported?
 
-Windows 10 v2004 or above. On previous versions of windows, a black screen is shown instead of hiding the window.
+Windows 10 v2004 or above. On previous versions of windows, a black screen shows up instead of hiding the window.
 
 #### Do future instances of the application get automatically hidden?
 
@@ -48,16 +48,19 @@ No
 
 #### Is it possible to see a preview of the screen on my side?
 
-You can use something like OBS's Windowed projector.
-
 <details>
-<summary>Preview</summary>
+<summary>You can use something like OBS's Windowed projector.</summary>
 
 ![Windowed Projector](./demo/win-projector.png)
 
-*Tip: you can hide this window from view too*
+_Tip: you can hide this window from view too._
+
 </details>
 
 #### Could I automatically hide windows using a hotkey?
 
 Yes! In the zip bundle you'll find a AutoHotkey script that hides windows when you press Ctrl+J. Feel free to customize.
+
+## Contributing
+
+Feel free to open an issue/PR if you find a bug or would like to contribute!
