@@ -1,31 +1,30 @@
 name: Build App
- 
+
 on: [push]
- 
+
 jobs:
   build:
- 
     runs-on: windows-latest
- 
+
     steps:
-    - uses: actions/checkout@v2
-      name: Checkout Code
-     
-    - name: Add msbuild to PATH
-      uses: microsoft/setup-msbuild@v1.0.2
+      - name: Checkout Code
+        uses: actions/checkout@v2
 
-    - name: Build Project
-      run: |
-        msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x64
-        msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x86
-    
-    - name: Generate zip bundle
-      run: 7z a -tzip Invisiwind.zip .\hide.ahk .\Build\bin\Release\*.dll .\Build\bin\Release\*.exe
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v1.0.2
 
-    - uses: marvinpinto/action-automatic-releases@latest
-      with:
-        repo_token: "${{ secrets.GITHUB_TOKEN }}"
-        automatic_release_tag: "latest"
-        prerelease: true
-        title: "Development Build"
-        files: Invisiwind.zip
+      - name: Build Project
+        run: |
+          msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x64
+          msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x86
+
+      - name: Generate zip bundle
+        run: 7z a -tzip Invisiwind.zip .\hide.ahk .\Build\bin\Release\*.dll .\Build\bin\Release\*.exe
+
+      - name: Publish release
+        uses: marvinpinto/action-automatic-releases@latest
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+          files: Invisiwind.zip
