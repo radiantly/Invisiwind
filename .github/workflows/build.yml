@@ -21,10 +21,18 @@ jobs:
       - name: Generate zip bundle
         run: 7z a -tzip Invisiwind.zip .\hide.ahk .\Build\bin\Release\*.dll .\Build\bin\Release\*.exe
 
-      - name: Publish release
-        uses: radiantly/action-automatic-releases@latest
+      - name: Publish latest pre-release
+        uses: marvinpinto/action-automatic-releases@latest
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "latest"
-          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+          prerelease: true
+          files: Invisiwind.zip
+
+      - if: startsWith(github.ref, 'refs/tags/v')
+        name: Publish tagged release
+        uses: marvinpinto/action-automatic-releases@latest
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          prerelease: false
           files: Invisiwind.zip
