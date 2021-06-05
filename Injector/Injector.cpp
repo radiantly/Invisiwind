@@ -57,6 +57,7 @@ void showHelp(const wchar_t* argZero) {
 
 std::unordered_set<int> getPIDsFromProcName(std::wstring& searchTerm) {
 	std::unordered_set<int> pids;
+	std::transform(searchTerm.begin(), searchTerm.end(), searchTerm.begin(), ::towlower);
 	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 	if (hSnapshot) {
 		PROCESSENTRY32 pe32{};
@@ -225,7 +226,7 @@ int wmain(int argc, wchar_t* argv[], wchar_t* envp[])
 							// );
 							// cerr << "Successfully wrote dllFullPath: ";
 							// std::wcerr << std::wstring(dllFullPath) << endl;
-							if (HANDLE remoteThread = CreateRemoteThreadEx(procHandle, NULL, 0, (LPTHREAD_START_ROUTINE)libAddr, mem, 0, NULL, NULL); remoteThread) {
+							if (HANDLE remoteThread = CreateRemoteThreadEx(procHandle, NULL, 0, static_cast<LPTHREAD_START_ROUTINE>(libAddr), mem, 0, NULL, NULL); remoteThread) {
 								// If we wanted to wait for the dll thread to return
 								// WaitForSingleObject(remoteThread, INFINITE);
 								if (CloseHandle(remoteThread) and CloseHandle(procHandle))
