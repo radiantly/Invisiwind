@@ -21,7 +21,16 @@ _Note: this tool works with any app (MS Teams, Discord, OBS, etc) and not just Z
 
 Simple: The tool performs dll injection to [SetWindowDisplayAffinity](https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity) to `WDA_EXCLUDEFROMCAPTURE`.
 
-## How do I use it?
+## How do I install it?
+
+To use this application, you can either use the installer or the portable version.
+
+### Use the installer (recommended)
+
+ - Download and run [InvisiwindInstaller.exe](https://github.com/radiantly/Invisiwind/releases/download/latest/InvisiwindInstaller.exe).
+ - Once the installation is complete, you will be able to run `Invisiwind` from the Start Menu.
+
+### Download the portable zip
 
 - Download and extract the generated zip bundle from [here](https://github.com/radiantly/Invisiwind/releases/download/latest/Invisiwind.zip).
 - Run `Invisiwind.exe`. You will now be dropped into a terminal.
@@ -33,10 +42,6 @@ Running it directly drops you into interactive mode. You can type `help` for mor
 You can also directly invoke it with commandline arguments. Type `invisiwind --help` for argument specification.
 
 ## FAQ
-
-#### I get a DLL error when trying to run `Invisiwind.exe`. How do I fix this?
-
-You will need the Microsoft Visual C++ Redistributable for Visual Studio 2019. You can download it from [here](https://aka.ms/vs/16/release/vc_redist.x64.exe).
 
 #### What OSes are supported?
 
