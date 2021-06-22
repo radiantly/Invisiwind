@@ -7,8 +7,8 @@ Invisiwind (short for _Invisible Window_) is an application that allows you to h
 I think this is best explained with a couple of screenshots I took during a Zoom meeting:
 
 <p float="left">
-  <img src="./demo/here.png" width="400" alt="What I see" />
-  <img src="./demo/there.png" width="400" alt="What they see" />
+  <img src="./Misc/here.png" width="400" alt="What I see" />
+  <img src="./Misc/there.png" width="400" alt="What they see" />
 </p>
 
 The screenshot on the left is what I see. The one on the right is what everyone else sees.
@@ -26,7 +26,7 @@ Simple: The tool performs dll injection to [SetWindowDisplayAffinity](https://do
 - Download and extract the generated zip bundle from [here](https://github.com/radiantly/Invisiwind/releases/download/latest/Invisiwind.zip).
 - Run `Invisiwind.exe`. You will now be dropped into a terminal.
 
-![usage](./demo/open.gif)
+![usage](./Misc/open.gif)
 
 Running it directly drops you into interactive mode. You can type `help` for more information.
 
@@ -51,7 +51,7 @@ No
 <details>
 <summary>You can use something like OBS's Windowed projector.</summary>
 
-![Windowed Projector](./demo/win-projector.png)
+![Windowed Projector](./Misc/win-projector.png)
 
 _Tip: you can hide this window from view too._
 

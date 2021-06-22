@@ -15,11 +15,14 @@ jobs:
 
       - name: Build Project
         run: |
-          msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x64
-          msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x86
+          msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x64 -m
+          msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x86 -m
 
       - name: Generate zip bundle
         run: 7z a -tzip Invisiwind.zip .\hide.ahk .\Build\bin\Release\*.dll .\Build\bin\Release\*.exe
+      
+      - name: Build Installer
+        run: iscc .\Misc\inno.iss
 
       - name: Publish latest pre-release
         uses: marvinpinto/action-automatic-releases@latest
@@ -27,7 +30,9 @@ jobs:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "latest"
           prerelease: true
-          files: Invisiwind.zip
+          files: |
+            Invisiwind.zip
+            Misc/Output/InvisiwindInstaller.exe
 
       - if: startsWith(github.ref, 'refs/tags/v')
         name: Publish tagged release
@@ -35,4 +40,6 @@ jobs:
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: false
-          files: Invisiwind.zip
+          files: |
+            Invisiwind.zip
+            Misc/Output/InvisiwindInstaller.exe
