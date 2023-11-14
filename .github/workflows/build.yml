@@ -8,10 +8,10 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v1.0.2
+        uses: microsoft/setup-msbuild@v1.3.1
 
       - name: Build Project
         run: |
@@ -20,7 +20,7 @@ jobs:
 
       - name: Generate zip bundle
         run: 7z a -tzip Invisiwind.zip .\hide.ahk .\Build\bin\Release\*.dll .\Build\bin\Release\*.exe
-      
+
       - name: Build Installer
         run: iscc .\Misc\inno.iss
 
