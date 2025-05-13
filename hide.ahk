@@ -1,4 +1,4 @@
-#NoTrayIcon  ; Hide tray icon
+#NoTrayIcon  ; Hide tray icon, comment line to show tray icon 
 
 ; If executable is built locally, use that instead
 if FileExist(".\Build\bin\Release\Invisiwind.exe")
