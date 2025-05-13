@@ -55,6 +55,34 @@ void showHelp(const wchar_t* argZero) {
 // Why do some functions have Ex? This is a new version of the function that has a different API to accomodate new features,
 // but has an Ex to prevent breaking old code.
 
+
+// Method to show last error code with message
+std::string GetLastErrorWithMessage() {
+	DWORD errorMessageID = ::GetLastError();
+	if (errorMessageID == 0)
+		return "No error message (code 0)";
+
+	LPSTR messageBuffer = nullptr;
+	size_t size = FormatMessageA(
+		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+		NULL, errorMessageID,
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		(LPSTR)&messageBuffer, 0, NULL);
+
+	std::string message(messageBuffer, size);
+	LocalFree(messageBuffer);
+
+	// Strip newline characters from the message (optional cleanup)
+	if (!message.empty() && (message.back() == '\n' || message.back() == '\r')) {
+		while (!message.empty() && (message.back() == '\n' || message.back() == '\r')) {
+			message.pop_back();
+		}
+	}
+
+	return " Error Code " + std::to_string(errorMessageID) + ": " + message;
+}
+
+
 std::unordered_set<int> getPIDsFromProcName(std::wstring& searchTerm) {
 	std::unordered_set<int> pids;
 	std::transform(searchTerm.begin(), searchTerm.end(), searchTerm.begin(), ::towlower);
@@ -231,19 +259,19 @@ int wmain(int argc, wchar_t* argv[], wchar_t* envp[])
 								// WaitForSingleObject(remoteThread, INFINITE);
 								if (CloseHandle(remoteThread) and CloseHandle(procHandle))
 									cerr << "Success!" << endl;
-								else cerr << "Injected Dll, but failed to close handles" << endl;
+								else std::cerr << "Injected Dll, but failed to close handles." << GetLastErrorWithMessage() << std::endl;
 							}
-							else cerr << "Failed to create remote thread" << endl;
+							else std::cerr << "Failed to create remote thread." << GetLastErrorWithMessage() << std::endl;
 						}
-						else cerr << "Failed to write to allocated memory" << endl;
+						else std::cerr << "Failed to write to allocated memory." << GetLastErrorWithMessage() << std::endl;
 					}
-					else cerr << "Failed to allocate memory" << endl;
+					else std::cerr << "Failed to allocate memory." << GetLastErrorWithMessage() << std::endl;
 				}
-				else cerr << "Failed to get address of LoadLibraryW" << endl;
+				else std::cerr << "Failed to get address of LoadLibraryW." << GetLastErrorWithMessage() << std::endl;
 			}
-			else cerr << "Failed to acquire handle on kernel32.dll" << endl;
+			else std::cerr << "Failed to acquire handle on kernel32.dll." << GetLastErrorWithMessage() << std::endl;
 		}
-		else cerr << "Failed to acquire handle on process " << pid << endl;
+		else std::cerr << "Failed to acquire handle on process " << pid << "." << GetLastErrorWithMessage() << std::endl;
 	};
 
 	if (argc > 1) {
