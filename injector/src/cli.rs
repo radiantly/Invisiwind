@@ -90,7 +90,7 @@ pub fn start() {
 
     processes.into_iter().for_each(|(pid, process)| {
         if let Some(hwnds) = windows.remove(&pid) {
-            injector::set_window_props(process, &hwnds, cli.hide_args.hide);
+            injector::set_window_props(process, &hwnds, cli.hide_args.hide, false);
         } else {
             print_error(format!(
                 "Cannot find any top level windows for pid {:?}",

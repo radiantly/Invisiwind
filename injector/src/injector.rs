@@ -95,39 +95,53 @@ pub fn get_top_level_windows() -> Vec<WindowInfo> {
     top_level_windows
 }
 
-pub fn inject_and_get_remote_proc<F>(
-    target_process: OwnedProcess,
-    proc_name: &str,
-) -> RemoteRawProcedure<F>
+pub fn inject_and_get_remote_proc<F>(syringe: &Syringe, proc_name: &str) -> RemoteRawProcedure<F>
 where
     F: RawRpcFunctionPtr,
 {
-    let syringe = Syringe::for_process(target_process);
-
     let mut dll_path = env::current_exe().unwrap();
     dll_path.pop();
     dll_path.push("payload.dll");
 
     let injected_payload = syringe.find_or_inject(dll_path).unwrap();
+
     return unsafe { syringe.get_raw_procedure::<F>(injected_payload, proc_name) }
         .unwrap()
         .unwrap();
 }
 
-pub fn set_window_props(target_process: OwnedProcess, hwnds: &[u32], hide: bool) {
+pub fn set_window_props(
+    target_process: OwnedProcess,
+    hwnds: &[u32],
+    hide: bool,
+    show_on_taskbar: bool,
+) {
+    let syringe = Syringe::for_process(target_process);
+
     let remote_proc = inject_and_get_remote_proc::<extern "system" fn(HWND, bool) -> bool>(
-        target_process,
+        &syringe,
         "SetWindowVisibility",
+    );
+
+    let remote_proc2 = inject_and_get_remote_proc::<extern "system" fn(HWND, bool) -> bool>(
+        &syringe,
+        "ShowOnTaskBar",
     );
 
     for hwnd in hwnds {
         remote_proc
             .call(HWND(hwnd.clone() as *mut _), hide)
             .unwrap();
+
+        if !show_on_taskbar {
+            remote_proc2
+                .call(HWND(hwnd.clone() as *mut _), !hide)
+                .unwrap();
+        }
     }
 }
 
-pub fn set_window_props_with_pid(pid: u32, hwnd: u32, hide: bool) {
+pub fn set_window_props_with_pid(pid: u32, hwnd: u32, hide: bool, show_on_taskbar: bool) {
     let target_process = OwnedProcess::from_pid(pid).unwrap();
-    set_window_props(target_process, &[hwnd], hide);
+    set_window_props(target_process, &[hwnd], hide, show_on_taskbar);
 }

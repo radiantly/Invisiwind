@@ -10,25 +10,20 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v1.3.1
-
       - name: Build Project
-        run: |
-          msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x64 -m
-          msbuild Invisiwind.sln /p:Configuration=Release /p:Platform=x86 -m
+        run: cargo build --release
 
       - name: Generate zip bundle
-        run: 7z a -tzip Invisiwind.zip .\hide.ahk .\Build\bin\Release\*.dll .\Build\bin\Release\*.exe
+        run: 7z a -tzip Invisiwind.zip .\hide.ahk .\target\release\*.dll .\target\release\*.exe
 
       - name: Build Installer
         run: iscc .\Misc\inno.iss
 
       - name: Publish latest pre-release
-        uses: marvinpinto/action-automatic-releases@latest
+        uses: softprops/action-gh-release@v2
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "latest"
+          token: "${{ secrets.GITHUB_TOKEN }}"
+          tag_name: latest
           prerelease: true
           files: |
             Invisiwind.zip

@@ -8,14 +8,15 @@ use std::thread;
 #[derive(Debug)]
 enum WorkerEvents {
     UPDATE,
-    HIDE(u32, u32),
-    SHOW(u32, u32),
+    HIDE(u32, u32, bool),
+    SHOW(u32, u32, bool),
 }
 
 #[derive(Debug)]
 struct Gui {
     windows: Arc<Mutex<Vec<WindowInfo>>>,
     sender: crossbeam_channel::Sender<WorkerEvents>,
+    hide_taskbar_icons: bool,
 }
 
 impl Gui {
@@ -34,19 +35,23 @@ impl Gui {
                         *windowst.lock().unwrap() = mem::take(&mut w);
                         println!("populating done");
                     }
-                    WorkerEvents::HIDE(pid, hwnd) => {
+                    WorkerEvents::HIDE(pid, hwnd, show_on_taskbar) => {
                         println!("wanna hide {:?}", hwnd);
-                        injector::set_window_props_with_pid(pid, hwnd, true);
+                        injector::set_window_props_with_pid(pid, hwnd, true, show_on_taskbar);
                     }
-                    WorkerEvents::SHOW(pid, hwnd) => {
+                    WorkerEvents::SHOW(pid, hwnd, show_on_taskbar) => {
                         println!("wanna show {:?}", hwnd);
-                        injector::set_window_props_with_pid(pid, hwnd, false);
+                        injector::set_window_props_with_pid(pid, hwnd, false, show_on_taskbar);
                     }
                 }
             }
         });
 
-        Gui { windows, sender }
+        Gui {
+            windows,
+            sender,
+            hide_taskbar_icons: false,
+        }
     }
 }
 
@@ -67,6 +72,7 @@ impl eframe::App for Gui {
         }
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Hide applications");
+            ui.add_space(4.0);
 
             egui::ScrollArea::vertical().show(ui, |ui| {
                 for window_info in self.windows.lock().unwrap().iter_mut() {
@@ -75,13 +81,28 @@ impl eframe::App for Gui {
                         ui.checkbox(&mut window_info.hidden, &window_info.title);
                     if checkbox_response.changed() {
                         let event = if window_info.hidden {
-                            WorkerEvents::HIDE(window_info.pid, window_info.hwnd)
+                            WorkerEvents::HIDE(
+                                window_info.pid,
+                                window_info.hwnd,
+                                !self.hide_taskbar_icons,
+                            )
                         } else {
-                            WorkerEvents::SHOW(window_info.pid, window_info.hwnd)
+                            WorkerEvents::SHOW(
+                                window_info.pid,
+                                window_info.hwnd,
+                                !self.hide_taskbar_icons,
+                            )
                         };
                         self.sender.send(event).unwrap();
                     }
                 }
+                ui.add_space(10.0);
+                ui.collapsing("Advanced settings", |ui| {
+                    ui.checkbox(
+                        &mut self.hide_taskbar_icons,
+                        "Hide from Alt+Tab and Taskbar",
+                    )
+                });
             });
         });
     }

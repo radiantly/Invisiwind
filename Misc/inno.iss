@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Invisiwind"
-#define MyAppVersion "1.1.4"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "Radiantly"
 #define MyAppURL "https://github.com/radiantly/Invisiwind"
 
@@ -46,8 +46,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\Build\bin\Release\*.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\Build\bin\Release\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\target\release\*.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\target\release\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{code:MyAppExeName}"
