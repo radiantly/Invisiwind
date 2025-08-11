@@ -1,9 +1,12 @@
 use crate::injector::{self, WindowInfo};
-use eframe::egui::{self, IconData};
-use image::{self, GenericImageView};
-use std::mem;
+use eframe::{
+    Renderer,
+    egui::{self, IconData},
+};
+use image::{GenericImageView, ImageFormat, ImageReader};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::{io::Cursor, mem};
 
 #[derive(Debug)]
 enum WorkerEvents {
@@ -111,11 +114,17 @@ impl eframe::App for Gui {
 pub fn start() {
     let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([320.0, 540.0]),
+        renderer: Renderer::Wgpu,
         ..Default::default()
     };
 
     // load icon
-    if let Ok(d_image) = image::open("../Misc/invicon.ico") {
+    if let Ok(d_image) = ImageReader::with_format(
+        Cursor::new(include_bytes!("../../Misc/invicon.ico")),
+        ImageFormat::Ico,
+    )
+    .decode()
+    {
         let (width, height) = d_image.dimensions();
         options.viewport = options.viewport.with_icon(Arc::new(IconData {
             rgba: d_image.into_rgba8().into_raw(),
