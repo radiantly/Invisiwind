@@ -114,7 +114,7 @@ pub fn set_window_props(
     target_process: OwnedProcess,
     hwnds: &[u32],
     hide: bool,
-    show_on_taskbar: bool,
+    hide_from_taskbar: bool,
 ) {
     let syringe = Syringe::for_process(target_process);
 
@@ -125,7 +125,7 @@ pub fn set_window_props(
 
     let remote_proc2 = inject_and_get_remote_proc::<extern "system" fn(HWND, bool) -> bool>(
         &syringe,
-        "ShowOnTaskBar",
+        "HideFromTaskbar",
     );
 
     for hwnd in hwnds {
@@ -133,15 +133,14 @@ pub fn set_window_props(
             .call(HWND(hwnd.clone() as *mut _), hide)
             .unwrap();
 
-        if !show_on_taskbar {
-            remote_proc2
-                .call(HWND(hwnd.clone() as *mut _), !hide)
-                .unwrap();
-        }
+        // TODO: only call this method if we have changed it before
+        remote_proc2
+            .call(HWND(hwnd.clone() as *mut _), hide && hide_from_taskbar)
+            .unwrap();
     }
 }
 
-pub fn set_window_props_with_pid(pid: u32, hwnd: u32, hide: bool, show_on_taskbar: bool) {
+pub fn set_window_props_with_pid(pid: u32, hwnd: u32, hide: bool, hide_from_taskbar: bool) {
     let target_process = OwnedProcess::from_pid(pid).unwrap();
-    set_window_props(target_process, &[hwnd], hide, show_on_taskbar);
+    set_window_props(target_process, &[hwnd], hide, hide_from_taskbar);
 }

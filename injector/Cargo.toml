@@ -12,6 +12,7 @@ egui_extras = "0.32.0"
 image = { version = "0.25.6", default-features = false, features = ["ico"]}
 wgpu = { version = "25.0.0", default-features = true }
 windows = { version = "0.61.3", features = ["Win32_UI_WindowsAndMessaging" , "Win32_Graphics_Dwm", "Win32_System_Console"] }
+windows-capture = "1.5.0"
 
 [build-dependencies]
 winresource = "0.1.23"
