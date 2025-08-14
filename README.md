@@ -23,12 +23,15 @@ Simple: The tool performs dll injection to [SetWindowDisplayAffinity](https://do
 
 ## How do I install it?
 
+> [!NOTE]  
+> This software may be detected as a virus/trojan by your antivirus due to the fact that it performs dll injection. This is a false positive and can be safely ignored.
+
 To use this application, you can either use the installer or the portable version.
 
 ### Use the installer (recommended)
 
- - Download and run [InvisiwindInstaller.exe](https://github.com/radiantly/Invisiwind/releases/download/latest/InvisiwindInstaller.exe).
- - Once the installation is complete, you will be able to run `Invisiwind` from the Start Menu.
+- Download and run [InvisiwindInstaller.exe](https://github.com/radiantly/Invisiwind/releases/download/latest/InvisiwindInstaller.exe).
+- Once the installation is complete, you will be able to run `Invisiwind` from the Start Menu.
 
 ### Download the portable zip
 
@@ -51,18 +54,7 @@ Windows 10 v2004 or above. On previous versions of windows, a black screen shows
 
 No
 
-#### Is it possible to see a preview of the screen on my side?
-
-<details>
-<summary>You can use something like OBS's Windowed projector.</summary>
-
-![Windowed Projector](./Misc/win-projector.png)
-
-_Tip: you can hide this window from view too._
-
-</details>
-
-#### Could I automatically hide windows using a hotkey?
+#### Can I hide windows using a hotkey?
 
 Yes! In the zip bundle you'll find a AutoHotkey script that hides windows when you press Ctrl+J. Feel free to customize.
 
