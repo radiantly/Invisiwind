@@ -1,7 +1,10 @@
 use crate::injector::{self, WindowInfo};
 use eframe::{
     Renderer,
-    egui::{self, ColorImage, Direction, IconData, Layout},
+    egui::{
+        self, Color32, ColorImage, Direction, FontData, FontDefinitions, FontFamily, FontId,
+        IconData, Layout, Margin, RichText, TextStyle,
+    },
 };
 use image::{GenericImageView, ImageFormat, ImageReader};
 use std::sync::{Arc, Mutex};
@@ -159,6 +162,16 @@ impl Gui {
             active_monitor: 0,
         }
     }
+
+    fn add_section_header(ui: &mut egui::Ui, header: impl Into<String>, desc: impl Into<String>) {
+        ui.label(
+            RichText::new(header)
+                .heading()
+                .color(Color32::from_rgb(242, 242, 242)),
+        );
+        ui.label(RichText::new(desc).color(Color32::from_rgb(148, 148, 148)));
+        ui.add_space(8.0);
+    }
 }
 
 impl eframe::App for Gui {
@@ -181,99 +194,101 @@ impl eframe::App for Gui {
             }
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            if !focused {
-                ui.with_layout(
-                    Layout::centered_and_justified(Direction::LeftToRight),
-                    |ui| {
-                        ui.label(":)");
-                    },
-                );
-                return;
-            }
+        egui::CentralPanel::default()
+            .frame(egui::Frame::central_panel(&ctx.style()).inner_margin(Margin::same(14)))
+            .show(ctx, |ui| {
+                if !focused {
+                    ui.with_layout(
+                        Layout::centered_and_justified(Direction::LeftToRight),
+                        |ui| {
+                            ui.label(":)");
+                        },
+                    );
+                    return;
+                }
 
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                if self.show_desktop_preview {
-                    ui.heading("Desktop Preview");
-                    ui.add_space(4.0);
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    if self.show_desktop_preview {
+                        Self::add_section_header(ui, "Preview", "How others will see your screen");
 
-                    if self.monitors.len() > 1 {
-                        ui.horizontal_wrapped(|ui| {
-                            for (i, monitor) in self.monitors.iter().enumerate() {
-                                let monitor_label = ui.selectable_label(
-                                    i == self.active_monitor,
-                                    format!("Screen {}", i + 1),
-                                );
-                                if monitor_label.clicked() && self.active_monitor != i {
-                                    self.active_monitor = i;
-                                    let _ = self
-                                        .capture_event_send
-                                        .send(CaptureWorkerEvent::CAPTURE(*monitor));
-                                }
+                        if let Ok(img) = self.capture_recv.try_recv() {
+                            if let Some(texture_handle) = &mut self.capture_tex {
+                                texture_handle.set(img, egui::TextureOptions::LINEAR);
+                            } else {
+                                self.capture_tex = Some(ctx.load_texture(
+                                    "screen_capture",
+                                    img,
+                                    egui::TextureOptions::LINEAR,
+                                ));
                             }
-                        });
-                        ui.add_space(4.0);
-                    }
-
-                    if let Ok(img) = self.capture_recv.try_recv() {
-                        if let Some(texture_handle) = &mut self.capture_tex {
-                            texture_handle.set(img, egui::TextureOptions::LINEAR);
-                        } else {
-                            self.capture_tex = Some(ctx.load_texture(
-                                "screen_capture",
-                                img,
-                                egui::TextureOptions::LINEAR,
-                            ));
+                            ctx.request_repaint();
                         }
-                        ctx.request_repaint();
+
+                        if let Some(tex) = &self.capture_tex {
+                            ui.add(egui::Image::from_texture(tex).shrink_to_fit());
+                        }
+
+                        if self.monitors.len() > 1 {
+                            ui.add_space(8.0);
+                            ui.horizontal_wrapped(|ui| {
+                                for (i, monitor) in self.monitors.iter().enumerate() {
+                                    let monitor_label = ui.selectable_label(
+                                        i == self.active_monitor,
+                                        format!("Screen {}", i + 1),
+                                    );
+                                    if monitor_label.clicked() && self.active_monitor != i {
+                                        self.active_monitor = i;
+                                        let _ = self
+                                            .capture_event_send
+                                            .send(CaptureWorkerEvent::CAPTURE(*monitor));
+                                    }
+                                }
+                            });
+                        }
+
+                        ui.add_space(14.0);
                     }
 
-                    if let Some(tex) = &self.capture_tex {
-                        ui.add(egui::Image::from_texture(tex).shrink_to_fit());
-                    }
-                    ui.add_space(8.0);
-                }
+                    Self::add_section_header(ui, "Hide applications", "Select the windows to hide");
 
-                ui.heading("Hide applications");
-                ui.add_space(4.0);
-                for window_info in self.windows.lock().unwrap().iter_mut() {
-                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate); // elide with "…"
-                    let checkbox_response =
-                        ui.checkbox(&mut window_info.hidden, &window_info.title);
-                    if checkbox_response.changed() {
-                        let event = if window_info.hidden {
-                            InjectorWorkerEvent::HIDE(
-                                window_info.pid,
-                                window_info.hwnd,
-                                self.hide_from_taskbar,
-                            )
-                        } else {
-                            InjectorWorkerEvent::SHOW(
-                                window_info.pid,
-                                window_info.hwnd,
-                                self.hide_from_taskbar,
-                            )
-                        };
-                        self.event_sender.send(event).unwrap();
+                    for window_info in self.windows.lock().unwrap().iter_mut() {
+                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate); // elide with "…"
+                        let checkbox_response =
+                            ui.checkbox(&mut window_info.hidden, &window_info.title);
+                        if checkbox_response.changed() {
+                            let event = if window_info.hidden {
+                                InjectorWorkerEvent::HIDE(
+                                    window_info.pid,
+                                    window_info.hwnd,
+                                    self.hide_from_taskbar,
+                                )
+                            } else {
+                                InjectorWorkerEvent::SHOW(
+                                    window_info.pid,
+                                    window_info.hwnd,
+                                    self.hide_from_taskbar,
+                                )
+                            };
+                            self.event_sender.send(event).unwrap();
+                        }
                     }
-                }
-                ui.add_space(10.0);
-                ui.collapsing("Advanced settings", |ui| {
-                    ui.checkbox(&mut self.hide_from_taskbar, "Hide from Alt+Tab and Taskbar");
-                    let preview_checkbox_response =
-                        ui.checkbox(&mut self.show_desktop_preview, "Show desktop preview");
-                    if preview_checkbox_response.changed() {
-                        let event = if self.show_desktop_preview {
-                            CaptureWorkerEvent::CAPTURE(self.monitors[self.active_monitor])
-                        } else {
-                            self.capture_tex = None;
-                            CaptureWorkerEvent::NONE
-                        };
-                        self.capture_event_send.send(event).unwrap();
-                    }
+                    ui.add_space(10.0);
+                    ui.collapsing("Advanced settings", |ui| {
+                        ui.checkbox(&mut self.hide_from_taskbar, "Hide from Alt+Tab and Taskbar");
+                        let preview_checkbox_response =
+                            ui.checkbox(&mut self.show_desktop_preview, "Show desktop preview");
+                        if preview_checkbox_response.changed() {
+                            let event = if self.show_desktop_preview {
+                                CaptureWorkerEvent::CAPTURE(self.monitors[self.active_monitor])
+                            } else {
+                                self.capture_tex = None;
+                                CaptureWorkerEvent::NONE
+                            };
+                            self.capture_event_send.send(event).unwrap();
+                        }
+                    });
                 });
             });
-        });
     }
 }
 
@@ -305,6 +320,70 @@ pub fn start() {
         Box::new(|cc| {
             // This gives us image support:
             egui_extras::install_image_loaders(&cc.egui_ctx);
+
+            let mut fonts = FontDefinitions::default();
+
+            fonts.font_data.insert(
+                "Inter_18pt-Regular".to_owned(),
+                Arc::new(FontData::from_static(include_bytes!(
+                    "../../Misc/fonts/Inter_18pt-Regular.ttf"
+                ))),
+            );
+
+            fonts.families.insert(
+                FontFamily::Name("Inter_18pt-Regular".into()),
+                vec!["Inter_18pt-Regular".to_owned()],
+            );
+
+            fonts.font_data.insert(
+                "Inter_18pt-Bold".to_owned(),
+                Arc::new(FontData::from_static(include_bytes!(
+                    "../../Misc/fonts/Inter_18pt-Bold.ttf"
+                ))),
+            );
+
+            fonts.families.insert(
+                FontFamily::Name("Inter_18pt-Bold".into()),
+                vec!["Inter_18pt-Bold".to_owned()],
+            );
+
+            cc.egui_ctx.set_fonts(fonts);
+
+            cc.egui_ctx.all_styles_mut(|style| {
+                // no rounded checkboxes
+                style.visuals.widgets.inactive.corner_radius = Default::default();
+                style.visuals.widgets.hovered.corner_radius = Default::default();
+                style.visuals.widgets.active.corner_radius = Default::default();
+
+                // we don't want strokes around checkboxes
+                style.visuals.widgets.hovered.bg_stroke = Default::default();
+                style.visuals.widgets.active.bg_stroke = Default::default();
+
+                // we don't want checkboxes or collapsibles to expand on hover/active state
+                style.visuals.widgets.hovered.expansion = 0.0;
+                style.visuals.widgets.active.expansion = 0.0;
+
+                // do not allow text to be selected
+                style.interaction.selectable_labels = false;
+
+                let mut text_styles = style.text_styles.clone();
+                text_styles.insert(
+                    TextStyle::Body,
+                    FontId {
+                        size: 12.0,
+                        family: egui::FontFamily::Name("Inter_18pt-Regular".into()),
+                    },
+                );
+
+                text_styles.insert(
+                    TextStyle::Heading,
+                    FontId {
+                        size: 16.0,
+                        family: egui::FontFamily::Name("Inter_18pt-Bold".into()),
+                    },
+                );
+                style.text_styles = text_styles;
+            });
 
             Ok(Box::new(Gui::new()))
         }),
