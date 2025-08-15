@@ -3,7 +3,7 @@ use eframe::{
     Renderer,
     egui::{
         self, Color32, ColorImage, Direction, FontData, FontDefinitions, FontFamily, FontId,
-        IconData, Layout, Margin, RichText, TextStyle,
+        IconData, Layout, Margin, RichText, TextStyle, Theme,
     },
 };
 use image::{GenericImageView, ImageFormat, ImageReader};
@@ -163,19 +163,33 @@ impl Gui {
         }
     }
 
-    fn add_section_header(ui: &mut egui::Ui, header: impl Into<String>, desc: impl Into<String>) {
-        ui.label(
-            RichText::new(header)
-                .heading()
-                .color(Color32::from_rgb(242, 242, 242)),
-        );
-        ui.label(RichText::new(desc).color(Color32::from_rgb(148, 148, 148)));
+    fn add_section_header(
+        ui: &mut egui::Ui,
+        theme: Theme,
+        header: impl Into<String>,
+        desc: impl Into<String>,
+    ) {
+        let (header_color, desc_color) = if theme == Theme::Light {
+            (
+                Color32::from_rgb(34, 34, 34),
+                Color32::from_rgb(119, 119, 119),
+            )
+        } else {
+            (
+                Color32::from_rgb(242, 242, 242),
+                Color32::from_rgb(148, 148, 148),
+            )
+        };
+
+        ui.label(RichText::new(header).heading().color(header_color));
+        ui.label(RichText::new(desc).color(desc_color));
         ui.add_space(8.0);
     }
 }
 
 impl eframe::App for Gui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let theme = ctx.theme();
         let (events, focused) = ctx.input(|i| (i.events.clone(), i.focused));
 
         for event in events {
@@ -209,7 +223,12 @@ impl eframe::App for Gui {
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     if self.show_desktop_preview {
-                        Self::add_section_header(ui, "Preview", "How others will see your screen");
+                        Self::add_section_header(
+                            ui,
+                            theme,
+                            "Preview",
+                            "How others will see your screen",
+                        );
 
                         if let Ok(img) = self.capture_recv.try_recv() {
                             if let Some(texture_handle) = &mut self.capture_tex {
@@ -249,7 +268,12 @@ impl eframe::App for Gui {
                         ui.add_space(14.0);
                     }
 
-                    Self::add_section_header(ui, "Hide applications", "Select the windows to hide");
+                    Self::add_section_header(
+                        ui,
+                        theme,
+                        "Hide applications",
+                        "Select the windows to hide",
+                    );
 
                     for window_info in self.windows.lock().unwrap().iter_mut() {
                         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate); // elide with "…"
@@ -348,6 +372,8 @@ pub fn start() {
             );
 
             cc.egui_ctx.set_fonts(fonts);
+
+            // cc.egui_ctx.set_theme(Theme::Light);
 
             cc.egui_ctx.all_styles_mut(|style| {
                 // no rounded checkboxes
