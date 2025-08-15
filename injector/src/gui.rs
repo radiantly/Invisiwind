@@ -1,21 +1,23 @@
 use crate::injector::{self, WindowInfo};
 use eframe::{
     Renderer,
-    egui::{self, ColorImage, IconData},
+    egui::{self, ColorImage, Direction, IconData, Layout},
 };
 use image::{GenericImageView, ImageFormat, ImageReader};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::{io::Cursor, mem};
-use windows_capture::capture::{CaptureControl, Context, GraphicsCaptureApiHandler};
-use windows_capture::frame::Frame;
-use windows_capture::monitor::Monitor;
-use windows_capture::settings::{
-    ColorFormat, CursorCaptureSettings, DirtyRegionSettings, DrawBorderSettings,
-    MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
+use windows_capture::{
+    capture::{CaptureControl, Context, GraphicsCaptureApiHandler},
+    frame::Frame,
+    monitor::Monitor,
+    settings::{
+        ColorFormat, CursorCaptureSettings, DirtyRegionSettings, DrawBorderSettings,
+        MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
+    },
 };
 
-enum CaptureWorkerEvents {
+enum CaptureWorkerEvent {
     CAPTURE(Monitor),
     NONE,
 }
@@ -60,7 +62,7 @@ impl GraphicsCaptureApiHandler for ScreenCapture {
 }
 
 #[derive(Debug)]
-enum WorkerEvents {
+enum InjectorWorkerEvent {
     UPDATE,
     HIDE(u32, u32, bool),
     SHOW(u32, u32, bool),
@@ -69,8 +71,8 @@ enum WorkerEvents {
 struct Gui {
     monitors: Vec<Monitor>,
     windows: Arc<Mutex<Vec<WindowInfo>>>,
-    event_sender: crossbeam_channel::Sender<WorkerEvents>,
-    capture_event_send: crossbeam_channel::Sender<CaptureWorkerEvents>,
+    event_sender: crossbeam_channel::Sender<InjectorWorkerEvent>,
+    capture_event_send: crossbeam_channel::Sender<CaptureWorkerEvent>,
     capture_recv: crossbeam_channel::Receiver<ColorImage>,
     capture_tex: Option<egui::TextureHandle>,
     hide_from_taskbar: bool,
@@ -88,17 +90,17 @@ impl Gui {
         thread::spawn(move || {
             for event in receiver {
                 match event {
-                    WorkerEvents::UPDATE => {
+                    InjectorWorkerEvent::UPDATE => {
                         println!("populating");
                         let mut w = injector::get_top_level_windows();
                         *windows_copy.lock().unwrap() = mem::take(&mut w);
                         println!("populating done");
                     }
-                    WorkerEvents::HIDE(pid, hwnd, show_on_taskbar) => {
+                    InjectorWorkerEvent::HIDE(pid, hwnd, show_on_taskbar) => {
                         println!("wanna hide {:?}", hwnd);
                         injector::set_window_props_with_pid(pid, hwnd, true, show_on_taskbar);
                     }
-                    WorkerEvents::SHOW(pid, hwnd, show_on_taskbar) => {
+                    InjectorWorkerEvent::SHOW(pid, hwnd, show_on_taskbar) => {
                         println!("wanna show {:?}", hwnd);
                         injector::set_window_props_with_pid(pid, hwnd, false, show_on_taskbar);
                     }
@@ -118,7 +120,7 @@ impl Gui {
                 }
 
                 match event {
-                    CaptureWorkerEvents::CAPTURE(monitor) => {
+                    CaptureWorkerEvent::CAPTURE(monitor) => {
                         let settings = Settings::new(
                             monitor,
                             CursorCaptureSettings::Default,
@@ -134,7 +136,7 @@ impl Gui {
                             active_capture_control = Some(capture_control);
                         }
                     }
-                    CaptureWorkerEvents::NONE => (),
+                    CaptureWorkerEvent::NONE => (),
                 }
             }
         });
@@ -142,7 +144,7 @@ impl Gui {
         let monitors = Monitor::enumerate().unwrap_or_default();
 
         if monitors.len() > 0 {
-            let _ = capture_event_send.send(CaptureWorkerEvents::CAPTURE(monitors[0]));
+            let _ = capture_event_send.send(CaptureWorkerEvent::CAPTURE(monitors[0]));
         }
 
         Gui {
@@ -161,19 +163,35 @@ impl Gui {
 
 impl eframe::App for Gui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let events = ctx.input(|i| i.events.clone());
+        let (events, focused) = ctx.input(|i| (i.events.clone(), i.focused));
 
         for event in events {
             if let egui::Event::WindowFocused(focused) = event {
                 if focused {
                     println!("focused");
-                    self.event_sender.send(WorkerEvents::UPDATE).unwrap();
+                    self.event_sender.send(InjectorWorkerEvent::UPDATE).unwrap();
+                    if self.show_desktop_preview {
+                        let _ = self.capture_event_send.send(CaptureWorkerEvent::CAPTURE(
+                            self.monitors[self.active_monitor],
+                        ));
+                    }
                 } else {
-                    println!("unfocused");
+                    let _ = self.capture_event_send.send(CaptureWorkerEvent::NONE);
                 }
             }
         }
+
         egui::CentralPanel::default().show(ctx, |ui| {
+            if !focused {
+                ui.with_layout(
+                    Layout::centered_and_justified(Direction::LeftToRight),
+                    |ui| {
+                        ui.label(":)");
+                    },
+                );
+                return;
+            }
+
             egui::ScrollArea::vertical().show(ui, |ui| {
                 if self.show_desktop_preview {
                     ui.heading("Desktop Preview");
@@ -190,7 +208,7 @@ impl eframe::App for Gui {
                                     self.active_monitor = i;
                                     let _ = self
                                         .capture_event_send
-                                        .send(CaptureWorkerEvents::CAPTURE(*monitor));
+                                        .send(CaptureWorkerEvent::CAPTURE(*monitor));
                                 }
                             }
                         });
@@ -224,13 +242,13 @@ impl eframe::App for Gui {
                         ui.checkbox(&mut window_info.hidden, &window_info.title);
                     if checkbox_response.changed() {
                         let event = if window_info.hidden {
-                            WorkerEvents::HIDE(
+                            InjectorWorkerEvent::HIDE(
                                 window_info.pid,
                                 window_info.hwnd,
                                 self.hide_from_taskbar,
                             )
                         } else {
-                            WorkerEvents::SHOW(
+                            InjectorWorkerEvent::SHOW(
                                 window_info.pid,
                                 window_info.hwnd,
                                 self.hide_from_taskbar,
@@ -246,10 +264,10 @@ impl eframe::App for Gui {
                         ui.checkbox(&mut self.show_desktop_preview, "Show desktop preview");
                     if preview_checkbox_response.changed() {
                         let event = if self.show_desktop_preview {
-                            CaptureWorkerEvents::CAPTURE(self.monitors[self.active_monitor])
+                            CaptureWorkerEvent::CAPTURE(self.monitors[self.active_monitor])
                         } else {
                             self.capture_tex = None;
-                            CaptureWorkerEvents::NONE
+                            CaptureWorkerEvent::NONE
                         };
                         self.capture_event_send.send(event).unwrap();
                     }
