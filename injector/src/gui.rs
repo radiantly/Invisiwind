@@ -7,7 +7,7 @@ use image::{GenericImageView, ImageFormat, ImageReader};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::{io::Cursor, mem};
-use windows_capture::capture::{Context, GraphicsCaptureApiHandler};
+use windows_capture::capture::{CaptureControl, Context, GraphicsCaptureApiHandler};
 use windows_capture::frame::Frame;
 use windows_capture::monitor::Monitor;
 use windows_capture::settings::{
@@ -15,8 +15,13 @@ use windows_capture::settings::{
     MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
 };
 
+enum CaptureWorkerEvents {
+    CAPTURE(Monitor),
+    NONE,
+}
+
 struct ScreenCapture {
-    capture_sender: crossbeam_channel::Sender<ColorImage>,
+    capture_send: crossbeam_channel::Sender<ColorImage>,
 }
 
 impl GraphicsCaptureApiHandler for ScreenCapture {
@@ -26,7 +31,7 @@ impl GraphicsCaptureApiHandler for ScreenCapture {
 
     fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
         Ok(ScreenCapture {
-            capture_sender: ctx.flags,
+            capture_send: ctx.flags,
         })
     }
 
@@ -35,6 +40,10 @@ impl GraphicsCaptureApiHandler for ScreenCapture {
         frame: &mut Frame,
         _capture_control: windows_capture::graphics_capture_api::InternalCaptureControl,
     ) -> Result<(), Self::Error> {
+        if self.capture_send.is_full() {
+            return Ok(());
+        }
+
         let width = frame.width();
         let height = frame.height();
         if let Ok(mut buffer) = frame.buffer() {
@@ -43,7 +52,7 @@ impl GraphicsCaptureApiHandler for ScreenCapture {
                     [width as usize, height as usize],
                     &no_pad_buffer,
                 );
-                let _ = self.capture_sender.try_send(img);
+                let _ = self.capture_send.try_send(img);
             }
         }
         Ok(())
@@ -58,17 +67,21 @@ enum WorkerEvents {
 }
 
 struct Gui {
+    monitors: Vec<Monitor>,
     windows: Arc<Mutex<Vec<WindowInfo>>>,
     event_sender: crossbeam_channel::Sender<WorkerEvents>,
-    capture_receiver: crossbeam_channel::Receiver<ColorImage>,
-    hide_from_taskbar: bool,
+    capture_event_send: crossbeam_channel::Sender<CaptureWorkerEvents>,
+    capture_recv: crossbeam_channel::Receiver<ColorImage>,
     capture_tex: Option<egui::TextureHandle>,
+    hide_from_taskbar: bool,
+    show_desktop_preview: bool,
+    active_monitor: usize,
 }
 
 impl Gui {
     fn new() -> Gui {
         let windows = Arc::new(Mutex::new(Vec::new()));
-        let windowst = windows.clone();
+        let windows_copy = windows.clone();
 
         let (sender, receiver) = crossbeam_channel::unbounded();
 
@@ -78,7 +91,7 @@ impl Gui {
                     WorkerEvents::UPDATE => {
                         println!("populating");
                         let mut w = injector::get_top_level_windows();
-                        *windowst.lock().unwrap() = mem::take(&mut w);
+                        *windows_copy.lock().unwrap() = mem::take(&mut w);
                         println!("populating done");
                     }
                     WorkerEvents::HIDE(pid, hwnd, show_on_taskbar) => {
@@ -93,39 +106,55 @@ impl Gui {
             }
         });
 
-        let (capture_sender, capture_receiver) = crossbeam_channel::bounded(1);
-
+        let (capture_send, capture_recv) = crossbeam_channel::bounded(1);
+        let (capture_event_send, capture_event_recv) = crossbeam_channel::unbounded();
         thread::spawn(move || {
-            let primary_monitor = Monitor::primary().expect("There is no primary monitor");
+            let mut active_capture_control: Option<CaptureControl<_, _>> = None;
+            for event in capture_event_recv.iter() {
+                if let Some(capture_control) = active_capture_control {
+                    // TODO: handle error here?
+                    let _ = capture_control.stop();
+                    active_capture_control = None;
+                }
 
-            let settings = Settings::new(
-                // Item to capture
-                primary_monitor,
-                // Capture cursor settings
-                CursorCaptureSettings::Default,
-                // Draw border settings
-                DrawBorderSettings::Default,
-                // Secondary window settings, if you want to include secondary windows in the capture
-                SecondaryWindowSettings::Default,
-                // Minimum update interval, if you want to change the frame rate limit (default is 60 FPS or 16.67 ms)
-                MinimumUpdateIntervalSettings::Default,
-                // Dirty region settings,
-                DirtyRegionSettings::Default,
-                // The desired color format for the captured frame.
-                ColorFormat::Rgba8,
-                // Additional flags for the capture settings that will be passed to the user-defined `new` function.
-                capture_sender,
-            );
+                match event {
+                    CaptureWorkerEvents::CAPTURE(monitor) => {
+                        let settings = Settings::new(
+                            monitor,
+                            CursorCaptureSettings::Default,
+                            DrawBorderSettings::Default,
+                            SecondaryWindowSettings::Default,
+                            MinimumUpdateIntervalSettings::Default,
+                            DirtyRegionSettings::Default,
+                            ColorFormat::Rgba8,
+                            capture_send.clone(),
+                        );
 
-            ScreenCapture::start(settings).expect("screen capture failed");
+                        if let Ok(capture_control) = ScreenCapture::start_free_threaded(settings) {
+                            active_capture_control = Some(capture_control);
+                        }
+                    }
+                    CaptureWorkerEvents::NONE => (),
+                }
+            }
         });
 
+        let monitors = Monitor::enumerate().unwrap_or_default();
+
+        if monitors.len() > 0 {
+            let _ = capture_event_send.send(CaptureWorkerEvents::CAPTURE(monitors[0]));
+        }
+
         Gui {
+            show_desktop_preview: monitors.len() > 0,
+            monitors,
             windows,
             event_sender: sender,
-            capture_receiver,
-            hide_from_taskbar: false,
+            capture_event_send,
+            capture_recv,
             capture_tex: None,
+            hide_from_taskbar: false,
+            active_monitor: 0,
         }
     }
 }
@@ -136,7 +165,6 @@ impl eframe::App for Gui {
 
         for event in events {
             if let egui::Event::WindowFocused(focused) = event {
-                // `focused` is a bool: true=gained focus, false=lost focus
                 if focused {
                     println!("focused");
                     self.event_sender.send(WorkerEvents::UPDATE).unwrap();
@@ -147,28 +175,46 @@ impl eframe::App for Gui {
         }
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.heading("Desktop Preview");
-                ui.add_space(4.0);
+                if self.show_desktop_preview {
+                    ui.heading("Desktop Preview");
+                    ui.add_space(4.0);
 
-                if let Ok(img) = self.capture_receiver.try_recv() {
-                    if let Some(texture_handle) = &mut self.capture_tex {
-                        texture_handle.set(img, egui::TextureOptions::default());
-                    } else {
-                        self.capture_tex = Some(ctx.load_texture(
-                            "screen_capture",
-                            img,
-                            egui::TextureOptions::LINEAR, // or NEAREST if you want crisp pixels
-                        ));
+                    if self.monitors.len() > 1 {
+                        ui.horizontal_wrapped(|ui| {
+                            for (i, monitor) in self.monitors.iter().enumerate() {
+                                let monitor_label = ui.selectable_label(
+                                    i == self.active_monitor,
+                                    format!("Screen {}", i + 1),
+                                );
+                                if monitor_label.clicked() && self.active_monitor != i {
+                                    self.active_monitor = i;
+                                    let _ = self
+                                        .capture_event_send
+                                        .send(CaptureWorkerEvents::CAPTURE(*monitor));
+                                }
+                            }
+                        });
+                        ui.add_space(4.0);
                     }
-                }
 
-                if let Some(tex) = &self.capture_tex {
-                    // Show at native size:
-                    ui.add(egui::Image::from_texture(tex).shrink_to_fit());
-                    // or force a size (e.g. scale to 512x512):
-                    // ui.image((tex.id(), egui::vec2(512.0, 512.0)));
+                    if let Ok(img) = self.capture_recv.try_recv() {
+                        if let Some(texture_handle) = &mut self.capture_tex {
+                            texture_handle.set(img, egui::TextureOptions::LINEAR);
+                        } else {
+                            self.capture_tex = Some(ctx.load_texture(
+                                "screen_capture",
+                                img,
+                                egui::TextureOptions::LINEAR,
+                            ));
+                        }
+                        ctx.request_repaint();
+                    }
+
+                    if let Some(tex) = &self.capture_tex {
+                        ui.add(egui::Image::from_texture(tex).shrink_to_fit());
+                    }
+                    ui.add_space(8.0);
                 }
-                ui.add_space(8.0);
 
                 ui.heading("Hide applications");
                 ui.add_space(4.0);
@@ -195,7 +241,18 @@ impl eframe::App for Gui {
                 }
                 ui.add_space(10.0);
                 ui.collapsing("Advanced settings", |ui| {
-                    ui.checkbox(&mut self.hide_from_taskbar, "Hide from Alt+Tab and Taskbar")
+                    ui.checkbox(&mut self.hide_from_taskbar, "Hide from Alt+Tab and Taskbar");
+                    let preview_checkbox_response =
+                        ui.checkbox(&mut self.show_desktop_preview, "Show desktop preview");
+                    if preview_checkbox_response.changed() {
+                        let event = if self.show_desktop_preview {
+                            CaptureWorkerEvents::CAPTURE(self.monitors[self.active_monitor])
+                        } else {
+                            self.capture_tex = None;
+                            CaptureWorkerEvents::NONE
+                        };
+                        self.capture_event_send.send(event).unwrap();
+                    }
                 });
             });
         });
