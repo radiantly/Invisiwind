@@ -6,11 +6,18 @@ use dll_syringe::{
 use std::env;
 use windows::{
     Win32::{
-        Foundation::{HWND, LPARAM, TRUE},
-        Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute},
+        Foundation::{HWND, LPARAM, TRUE, WPARAM},
+        Graphics::{
+            Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute},
+            Gdi::{
+                BI_RGB, BITMAP, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS, DeleteObject, GetDC,
+                GetDIBits, GetObjectW, ReleaseDC,
+            },
+        },
         UI::WindowsAndMessaging::{
-            EnumWindows, GetWindowDisplayAffinity, GetWindowTextW, GetWindowThreadProcessId,
-            IsWindowVisible,
+            EnumWindows, GCLP_HICONSM, GetClassLongPtrW, GetIconInfo, GetWindowDisplayAffinity,
+            GetWindowTextW, GetWindowThreadProcessId, HICON, ICON_SMALL2, ICONINFO,
+            IsWindowVisible, SendMessageW, WM_GETICON,
         },
     },
     core::BOOL,
@@ -22,6 +29,86 @@ pub struct WindowInfo {
     pub title: String,
     pub pid: u32,
     pub hidden: bool,
+}
+
+pub fn get_icon(hwnd: u32) -> Option<(usize, usize, Vec<u8>)> {
+    let hwnd = HWND(hwnd.clone() as *mut _);
+    let lresult =
+        unsafe { SendMessageW(hwnd, WM_GETICON, Some(WPARAM(ICON_SMALL2 as usize)), None) };
+
+    let hicon = if lresult.0 == 0 {
+        println!("- no hicon from sendmessage");
+
+        let uresult = unsafe { GetClassLongPtrW(hwnd, GCLP_HICONSM) };
+        if uresult == 0 {
+            println!("- no hicon from getclasslongptrsm");
+            return None;
+        }
+        HICON(uresult as *mut _)
+    } else {
+        HICON(lresult.0 as *mut _)
+    };
+
+    let mut icon_info = ICONINFO::default();
+    let info_result = unsafe { GetIconInfo(hicon, &mut icon_info as *mut _) };
+    if let Err(err) = info_result {
+        println!("- no iconinfo retrieved {:?}", err);
+        return None;
+    }
+
+    let hdc = unsafe { GetDC(None) };
+    if hdc.is_invalid() {
+        println!("- no dc");
+        return None;
+    }
+
+    let mut bitmap = BITMAP::default();
+    let object_result = unsafe {
+        GetObjectW(
+            icon_info.hbmColor.into(),
+            std::mem::size_of::<BITMAP>() as i32,
+            Some(&mut bitmap as *mut _ as *mut _),
+        )
+    };
+    if object_result == 0 {
+        println!("no object");
+        return None;
+    }
+
+    let mut bmi = BITMAPINFO::default();
+    bmi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
+    bmi.bmiHeader.biWidth = bitmap.bmWidth;
+    bmi.bmiHeader.biHeight = -bitmap.bmHeight;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB.0;
+
+    let pixel_count = bitmap.bmWidth * bitmap.bmHeight;
+    let mut pixels: Vec<u8> = vec![0; (pixel_count * 4) as usize];
+    let _ = unsafe {
+        GetDIBits(
+            hdc,
+            icon_info.hbmColor,
+            0,
+            bitmap.bmHeight as u32,
+            Some(pixels.as_mut_ptr() as *mut _),
+            &mut bmi as *mut _,
+            DIB_RGB_COLORS,
+        )
+    };
+
+    for i in (0..pixels.len()).step_by(4) {
+        (pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]) =
+            (pixels[i + 2], pixels[i + 1], pixels[i], pixels[i + 3]);
+    }
+
+    let icon = Some((bitmap.bmWidth as usize, bitmap.bmHeight as usize, pixels));
+
+    let _ = unsafe { ReleaseDC(None, hdc) };
+    let _ = unsafe { DeleteObject(icon_info.hbmColor.into()) };
+    let _ = unsafe { DeleteObject(icon_info.hbmMask.into()) };
+
+    return icon;
 }
 
 unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
@@ -101,7 +188,7 @@ where
 {
     let mut dll_path = env::current_exe().unwrap();
     dll_path.pop();
-    dll_path.push("payload.dll");
+    dll_path.push("utils.dll");
 
     let injected_payload = syringe.find_or_inject(dll_path).unwrap();
 

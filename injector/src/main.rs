@@ -2,7 +2,7 @@
 
 mod cli;
 mod gui;
-mod injector;
+mod native;
 
 use std::env;
 

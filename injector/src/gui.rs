@@ -1,14 +1,17 @@
-use crate::injector::{self, WindowInfo};
+use crate::native::{self, WindowInfo};
 use eframe::{
     Renderer,
     egui::{
-        self, Color32, ColorImage, Direction, FontData, FontDefinitions, FontFamily, FontId,
-        IconData, Layout, Margin, RichText, TextStyle, Theme,
+        self, Atom, AtomExt, Color32, ColorImage, Direction, FontData, FontDefinitions, FontFamily,
+        FontId, IconData, Image, Layout, Margin, RichText, TextStyle, Theme, Vec2,
     },
 };
 use image::{GenericImageView, ImageFormat, ImageReader};
-use std::sync::{Arc, Mutex};
 use std::thread;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 use std::{io::Cursor, mem};
 use windows_capture::{
     capture::{CaptureControl, Context, GraphicsCaptureApiHandler},
@@ -21,8 +24,8 @@ use windows_capture::{
 };
 
 enum CaptureWorkerEvent {
-    CAPTURE(Monitor),
-    NONE,
+    Capture(Monitor),
+    StopCapture,
 }
 
 struct ScreenCapture {
@@ -81,6 +84,7 @@ struct Gui {
     hide_from_taskbar: bool,
     show_desktop_preview: bool,
     active_monitor: usize,
+    icon_cache: HashMap<(u32, u32), Option<egui::TextureHandle>>,
 }
 
 impl Gui {
@@ -95,17 +99,17 @@ impl Gui {
                 match event {
                     InjectorWorkerEvent::UPDATE => {
                         println!("populating");
-                        let mut w = injector::get_top_level_windows();
+                        let mut w = native::get_top_level_windows();
                         *windows_copy.lock().unwrap() = mem::take(&mut w);
                         println!("populating done");
                     }
                     InjectorWorkerEvent::HIDE(pid, hwnd, show_on_taskbar) => {
                         println!("wanna hide {:?}", hwnd);
-                        injector::set_window_props_with_pid(pid, hwnd, true, show_on_taskbar);
+                        native::set_window_props_with_pid(pid, hwnd, true, show_on_taskbar);
                     }
                     InjectorWorkerEvent::SHOW(pid, hwnd, show_on_taskbar) => {
                         println!("wanna show {:?}", hwnd);
-                        injector::set_window_props_with_pid(pid, hwnd, false, show_on_taskbar);
+                        native::set_window_props_with_pid(pid, hwnd, false, show_on_taskbar);
                     }
                 }
             }
@@ -123,7 +127,7 @@ impl Gui {
                 }
 
                 match event {
-                    CaptureWorkerEvent::CAPTURE(monitor) => {
+                    CaptureWorkerEvent::Capture(monitor) => {
                         let settings = Settings::new(
                             monitor,
                             CursorCaptureSettings::Default,
@@ -139,7 +143,7 @@ impl Gui {
                             active_capture_control = Some(capture_control);
                         }
                     }
-                    CaptureWorkerEvent::NONE => (),
+                    CaptureWorkerEvent::StopCapture => (),
                 }
             }
         });
@@ -147,7 +151,7 @@ impl Gui {
         let monitors = Monitor::enumerate().unwrap_or_default();
 
         if monitors.len() > 0 {
-            let _ = capture_event_send.send(CaptureWorkerEvent::CAPTURE(monitors[0]));
+            let _ = capture_event_send.send(CaptureWorkerEvent::Capture(monitors[0]));
         }
 
         Gui {
@@ -160,7 +164,29 @@ impl Gui {
             capture_tex: None,
             hide_from_taskbar: false,
             active_monitor: 0,
+            icon_cache: HashMap::new(),
         }
+    }
+
+    fn get_icon<'a>(
+        icon_cache: &'a mut HashMap<(u32, u32), Option<egui::TextureHandle>>,
+        ctx: &egui::Context,
+        pid: u32,
+        hwnd: u32,
+    ) -> &'a Option<egui::TextureHandle> {
+        if !icon_cache.contains_key(&(pid, hwnd)) {
+            let icon = match native::get_icon(hwnd) {
+                Some((width, height, buffer)) => {
+                    let image = ColorImage::from_rgba_unmultiplied([width, height], &buffer);
+                    Some(ctx.load_texture("icon", image, egui::TextureOptions::LINEAR))
+                }
+                None => None,
+            };
+
+            icon_cache.insert((pid, hwnd), icon);
+        }
+
+        icon_cache.get(&(pid, hwnd)).unwrap()
     }
 
     fn add_section_header(
@@ -169,16 +195,15 @@ impl Gui {
         header: impl Into<String>,
         desc: impl Into<String>,
     ) {
-        let (header_color, desc_color) = if theme == Theme::Light {
-            (
+        let (header_color, desc_color) = match theme {
+            Theme::Light => (
                 Color32::from_rgb(34, 34, 34),
                 Color32::from_rgb(119, 119, 119),
-            )
-        } else {
-            (
+            ),
+            Theme::Dark => (
                 Color32::from_rgb(242, 242, 242),
                 Color32::from_rgb(148, 148, 148),
-            )
+            ),
         };
 
         ui.label(RichText::new(header).heading().color(header_color));
@@ -189,24 +214,35 @@ impl Gui {
 
 impl eframe::App for Gui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let theme = ctx.theme();
-        let (events, focused) = ctx.input(|i| (i.events.clone(), i.focused));
+        // graceful close
+        if ctx.input(|i| i.viewport().close_requested()) {
+            let _ = self
+                .capture_event_send
+                .send(CaptureWorkerEvent::StopCapture);
+            return;
+        }
 
-        for event in events {
+        // check if focus has changed
+        for event in ctx.input(|i| i.events.clone()) {
             if let egui::Event::WindowFocused(focused) = event {
                 if focused {
                     println!("focused");
                     self.event_sender.send(InjectorWorkerEvent::UPDATE).unwrap();
                     if self.show_desktop_preview {
-                        let _ = self.capture_event_send.send(CaptureWorkerEvent::CAPTURE(
+                        let _ = self.capture_event_send.send(CaptureWorkerEvent::Capture(
                             self.monitors[self.active_monitor],
                         ));
                     }
                 } else {
-                    let _ = self.capture_event_send.send(CaptureWorkerEvent::NONE);
+                    let _ = self
+                        .capture_event_send
+                        .send(CaptureWorkerEvent::StopCapture);
                 }
             }
         }
+
+        let theme = ctx.theme();
+        let focused = ctx.input(|i| i.focused);
 
         egui::CentralPanel::default()
             .frame(egui::Frame::central_panel(&ctx.style()).inner_margin(Margin::same(14)))
@@ -259,7 +295,7 @@ impl eframe::App for Gui {
                                         self.active_monitor = i;
                                         let _ = self
                                             .capture_event_send
-                                            .send(CaptureWorkerEvent::CAPTURE(*monitor));
+                                            .send(CaptureWorkerEvent::Capture(*monitor));
                                     }
                                 }
                             });
@@ -277,8 +313,29 @@ impl eframe::App for Gui {
 
                     for window_info in self.windows.lock().unwrap().iter_mut() {
                         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate); // elide with "…"
+
+                        let icon_atom = if let Some(texture) = Gui::get_icon(
+                            &mut self.icon_cache,
+                            ctx,
+                            window_info.pid,
+                            window_info.hwnd,
+                        ) {
+                            Image::from_texture(texture)
+                                .max_height(16.0)
+                                .atom_max_width(16.0)
+                        } else {
+                            Atom::grow().atom_size(Vec2::new(16.0, 0.0))
+                        };
+
+                        let checkbox_label = (
+                            Atom::grow().atom_size(Vec2::new(0.0, 0.0)),
+                            icon_atom,
+                            Atom::grow().atom_size(Vec2::new(0.0, 0.0)),
+                            &window_info.title,
+                        );
+
                         let checkbox_response =
-                            ui.checkbox(&mut window_info.hidden, &window_info.title);
+                            ui.checkbox(&mut window_info.hidden, checkbox_label);
                         if checkbox_response.changed() {
                             let event = if window_info.hidden {
                                 InjectorWorkerEvent::HIDE(
@@ -295,6 +352,7 @@ impl eframe::App for Gui {
                             };
                             self.event_sender.send(event).unwrap();
                         }
+                        ui.add_space(2.0);
                     }
                     ui.add_space(10.0);
                     ui.collapsing("Advanced settings", |ui| {
@@ -303,10 +361,10 @@ impl eframe::App for Gui {
                             ui.checkbox(&mut self.show_desktop_preview, "Show desktop preview");
                         if preview_checkbox_response.changed() {
                             let event = if self.show_desktop_preview {
-                                CaptureWorkerEvent::CAPTURE(self.monitors[self.active_monitor])
+                                CaptureWorkerEvent::Capture(self.monitors[self.active_monitor])
                             } else {
                                 self.capture_tex = None;
-                                CaptureWorkerEvent::NONE
+                                CaptureWorkerEvent::StopCapture
                             };
                             self.capture_event_send.send(event).unwrap();
                         }

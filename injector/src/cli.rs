@@ -1,4 +1,4 @@
-use crate::injector;
+use crate::native;
 use clap::{ArgAction, Args, Error, Parser, error::ErrorKind};
 use dll_syringe::process::{OwnedProcess, Process};
 use std::collections::HashMap;
@@ -79,7 +79,7 @@ pub fn start() {
 
     // populate available windows
     let mut windows: HashMap<u32, Vec<u32>> = HashMap::new();
-    injector::get_top_level_windows()
+    native::get_top_level_windows()
         .into_iter()
         .for_each(|window_info| {
             windows
@@ -90,7 +90,7 @@ pub fn start() {
 
     processes.into_iter().for_each(|(pid, process)| {
         if let Some(hwnds) = windows.remove(&pid) {
-            injector::set_window_props(process, &hwnds, cli.hide_args.hide, false);
+            native::set_window_props(process, &hwnds, cli.hide_args.hide, false);
         } else {
             print_error(format!(
                 "Cannot find any top level windows for pid {:?}",
