@@ -23,6 +23,8 @@ Simple: The tool performs dll injection to [SetWindowDisplayAffinity](https://do
 
 ## How do I install it?
 
+<img align="right" src="Misc/screenshot-light.png">
+
 > [!NOTE]  
 > This software may be detected as a virus/trojan by your antivirus due to the fact that it performs dll injection. This is a false positive and can be safely ignored.
 
@@ -37,10 +39,6 @@ To use this application, you can either use the installer or the portable versio
 
 - Download and extract the generated zip bundle from [here](https://github.com/radiantly/Invisiwind/releases/download/latest/Invisiwind.zip).
 - Run `Invisiwind.exe`. You will now be dropped into a terminal.
-
-![usage](./Misc/open.gif)
-
-Running it directly drops you into interactive mode. You can type `help` for more information.
 
 You can also directly invoke it with commandline arguments. Type `invisiwind --help` for argument specification.
 
