@@ -28,6 +28,12 @@ enum CaptureWorkerEvent {
     StopCapture,
 }
 
+#[derive(Debug)]
+enum InjectorWorkerEvent {
+    Update,
+    PerformOp(u32, u32, bool, Option<bool>),
+}
+
 struct ScreenCapture {
     capture_send: crossbeam_channel::Sender<ColorImage>,
 }
@@ -67,13 +73,6 @@ impl GraphicsCaptureApiHandler for ScreenCapture {
     }
 }
 
-#[derive(Debug)]
-enum InjectorWorkerEvent {
-    UPDATE,
-    HIDE(u32, u32, bool),
-    SHOW(u32, u32, bool),
-}
-
 struct Gui {
     monitors: Vec<Monitor>,
     windows: Arc<Mutex<Vec<WindowInfo>>>,
@@ -97,19 +96,20 @@ impl Gui {
         thread::spawn(move || {
             for event in receiver {
                 match event {
-                    InjectorWorkerEvent::UPDATE => {
+                    InjectorWorkerEvent::Update => {
                         println!("populating");
                         let mut w = native::get_top_level_windows();
                         *windows_copy.lock().unwrap() = mem::take(&mut w);
                         println!("populating done");
                     }
-                    InjectorWorkerEvent::HIDE(pid, hwnd, show_on_taskbar) => {
-                        println!("wanna hide {:?}", hwnd);
-                        native::set_window_props_with_pid(pid, hwnd, true, show_on_taskbar);
-                    }
-                    InjectorWorkerEvent::SHOW(pid, hwnd, show_on_taskbar) => {
-                        println!("wanna show {:?}", hwnd);
-                        native::set_window_props_with_pid(pid, hwnd, false, show_on_taskbar);
+                    InjectorWorkerEvent::PerformOp(pid, hwnd, hide_window, hide_from_taskbar) => {
+                        println!("performing on op on {:?}", hwnd);
+                        native::Injector::set_window_props_with_pid(
+                            pid,
+                            hwnd,
+                            hide_window,
+                            hide_from_taskbar,
+                        );
                     }
                 }
             }
@@ -210,6 +210,22 @@ impl Gui {
         ui.label(RichText::new(desc).color(desc_color));
         ui.add_space(8.0);
     }
+
+    fn handle_hide_on_taskbar_change(&self) {
+        for window_info in self.windows.lock().unwrap().iter_mut() {
+            if !window_info.hidden {
+                continue;
+            }
+
+            let event = InjectorWorkerEvent::PerformOp(
+                window_info.pid,
+                window_info.hwnd,
+                true,
+                Some(self.hide_from_taskbar),
+            );
+            self.event_sender.send(event).unwrap();
+        }
+    }
 }
 
 impl eframe::App for Gui {
@@ -227,7 +243,7 @@ impl eframe::App for Gui {
             if let egui::Event::WindowFocused(focused) = event {
                 if focused {
                     println!("focused");
-                    self.event_sender.send(InjectorWorkerEvent::UPDATE).unwrap();
+                    self.event_sender.send(InjectorWorkerEvent::Update).unwrap();
                     if self.show_desktop_preview {
                         let _ = self.capture_event_send.send(CaptureWorkerEvent::Capture(
                             self.monitors[self.active_monitor],
@@ -337,26 +353,30 @@ impl eframe::App for Gui {
                         let checkbox_response =
                             ui.checkbox(&mut window_info.hidden, checkbox_label);
                         if checkbox_response.changed() {
-                            let event = if window_info.hidden {
-                                InjectorWorkerEvent::HIDE(
-                                    window_info.pid,
-                                    window_info.hwnd,
-                                    self.hide_from_taskbar,
-                                )
-                            } else {
-                                InjectorWorkerEvent::SHOW(
-                                    window_info.pid,
-                                    window_info.hwnd,
-                                    self.hide_from_taskbar,
-                                )
+                            let hide_from_taskbar = match self.hide_from_taskbar {
+                                true => Some(window_info.hidden),
+                                false => None,
                             };
+
+                            let event = InjectorWorkerEvent::PerformOp(
+                                window_info.pid,
+                                window_info.hwnd,
+                                window_info.hidden,
+                                hide_from_taskbar,
+                            );
                             self.event_sender.send(event).unwrap();
                         }
                         ui.add_space(2.0);
                     }
                     ui.add_space(10.0);
                     ui.collapsing("Advanced settings", |ui| {
-                        ui.checkbox(&mut self.hide_from_taskbar, "Hide from Alt+Tab and Taskbar");
+                        let taskbar_checkbox_response = ui
+                            .checkbox(&mut self.hide_from_taskbar, "Hide from Alt+Tab and Taskbar");
+
+                        if taskbar_checkbox_response.changed() {
+                            self.handle_hide_on_taskbar_change();
+                        }
+
                         let preview_checkbox_response =
                             ui.checkbox(&mut self.show_desktop_preview, "Show desktop preview");
                         if preview_checkbox_response.changed() {
