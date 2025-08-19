@@ -1,9 +1,10 @@
 use dll_syringe::{
     Syringe,
-    process::OwnedProcess,
+    process::{BorrowedProcessModule, OwnedProcess, Process},
     rpc::{RawRpcFunctionPtr, RemoteRawProcedure},
 };
-use std::env;
+use std::error;
+use std::{env, path::PathBuf};
 use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, TRUE, WPARAM},
@@ -185,22 +186,30 @@ pub fn get_top_level_windows() -> Vec<WindowInfo> {
 pub struct Injector {}
 
 impl Injector {
-    pub fn inject_and_get_remote_proc<F>(
-        syringe: &Syringe,
-        proc_name: &str,
-    ) -> RemoteRawProcedure<F>
-    where
-        F: RawRpcFunctionPtr,
-    {
-        let mut dll_path = env::current_exe().unwrap();
+    fn get_dll_path(process: &OwnedProcess) -> Result<PathBuf, Box<dyn error::Error>> {
+        let mut dll_path = env::current_exe()?;
         dll_path.pop();
-        dll_path.push("utils.dll");
 
-        let injected_payload = syringe.find_or_inject(dll_path).unwrap();
+        if cfg!(debug_assertions) && process.runs_under_wow64()? {
+            dll_path.push("../i686-pc-windows-msvc/debug/utils.dll");
+        } else if process.is_x86()? {
+            dll_path.push("utils32.dll");
+        } else {
+            dll_path.push("utils.dll");
+        }
 
-        return unsafe { syringe.get_raw_procedure::<F>(injected_payload, proc_name) }
-            .unwrap()
-            .unwrap();
+        Ok(dll_path)
+    }
+
+    pub fn get_remote_proc<F: RawRpcFunctionPtr>(
+        syringe: &Syringe,
+        module: BorrowedProcessModule<'_>,
+        proc_name: &str,
+    ) -> Result<RemoteRawProcedure<F>, Box<dyn error::Error>> {
+        match unsafe { syringe.get_raw_procedure::<F>(module, proc_name) }? {
+            Some(remote_proc) => Ok(remote_proc),
+            None => Err(format!("Failed to find procedure {}", proc_name).into()),
+        }
     }
 
     pub fn set_window_props(
@@ -208,30 +217,31 @@ impl Injector {
         hwnds: &[u32],
         hide: bool,
         hide_from_taskbar: Option<bool>,
-    ) {
+    ) -> Result<(), Box<dyn error::Error>> {
+        let dll_path = Self::get_dll_path(&target_process)?;
         let syringe = Syringe::for_process(target_process);
+        let module = syringe.find_or_inject(dll_path)?;
 
-        let remote_proc = Self::inject_and_get_remote_proc::<extern "system" fn(HWND, bool) -> bool>(
+        let remote_proc = Self::get_remote_proc::<extern "system" fn(u32, bool) -> bool>(
             &syringe,
+            module,
             "SetWindowVisibility",
-        );
+        )?;
 
-        let remote_proc2 = Self::inject_and_get_remote_proc::<extern "system" fn(HWND, bool) -> bool>(
+        let remote_proc2 = Self::get_remote_proc::<extern "system" fn(u32, bool) -> bool>(
             &syringe,
+            module,
             "HideFromTaskbar",
-        );
+        )?;
 
         for hwnd in hwnds {
-            remote_proc
-                .call(HWND(hwnd.clone() as *mut _), hide)
-                .unwrap();
+            remote_proc.call(*hwnd, hide).unwrap();
 
             if let Some(hide_from_taskbar) = hide_from_taskbar {
-                remote_proc2
-                    .call(HWND(hwnd.clone() as *mut _), hide_from_taskbar)
-                    .unwrap();
+                remote_proc2.call(*hwnd, hide_from_taskbar).unwrap();
             }
         }
+        Ok(())
     }
 
     pub fn set_window_props_with_pid(
@@ -239,8 +249,9 @@ impl Injector {
         hwnd: u32,
         hide: bool,
         hide_from_taskbar: Option<bool>,
-    ) {
-        let target_process = OwnedProcess::from_pid(pid).unwrap();
-        Self::set_window_props(target_process, &[hwnd], hide, hide_from_taskbar);
+    ) -> Result<(), Box<dyn error::Error>> {
+        let target_process = OwnedProcess::from_pid(pid)?;
+        Self::set_window_props(target_process, &[hwnd], hide, hide_from_taskbar)?;
+        Ok(())
     }
 }

@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5.43", features = ["derive"] }
 crossbeam-channel = "0.5.15"
-dll-syringe = { version = "0.17.0", features = ["rpc-raw"] }
+dll-syringe = { version = "0.17.0", features = ["into-x86-from-x64", "rpc-raw"] }
 eframe = { version = "0.32.0", features = ["wgpu"] }
 egui_extras = "0.32.0"
 image = { version = "0.25.6", default-features = false, features = ["ico"]}

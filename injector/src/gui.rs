@@ -104,12 +104,14 @@ impl Gui {
                     }
                     InjectorWorkerEvent::PerformOp(pid, hwnd, hide_window, hide_from_taskbar) => {
                         println!("performing on op on {:?}", hwnd);
-                        native::Injector::set_window_props_with_pid(
+                        if let Err(error) = native::Injector::set_window_props_with_pid(
                             pid,
                             hwnd,
                             hide_window,
                             hide_from_taskbar,
-                        );
+                        ) {
+                            println!("Failed: {:?}", error);
+                        }
                     }
                 }
             }

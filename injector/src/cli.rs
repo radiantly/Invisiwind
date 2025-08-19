@@ -90,7 +90,11 @@ pub fn start() {
 
     processes.into_iter().for_each(|(pid, process)| {
         if let Some(hwnds) = windows.remove(&pid) {
-            native::Injector::set_window_props(process, &hwnds, cli.hide_args.hide, None);
+            let result =
+                native::Injector::set_window_props(process, &hwnds, cli.hide_args.hide, None);
+            if let Err(err) = result {
+                print_error(format!("Error: {:?}", err));
+            }
         } else {
             print_error(format!(
                 "Cannot find any top level windows for pid {:?}",

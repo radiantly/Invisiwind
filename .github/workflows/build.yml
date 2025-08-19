@@ -11,7 +11,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Project
-        run: cargo build --release
+        run: |
+          cargo build --release
+          cargo build --release -p payload --target i686-pc-windows-msvc
+
+      - name: Copy 32-bit binaries
+        shell: powershell
+        run: Copy-Item -Path .\target\i686-pc-windows-msvc\release\utils.dll -Destination .\target\release\utils32.dll
 
       - name: Generate zip bundle
         run: 7z a -tzip Invisiwind.zip .\hide.ahk .\target\release\*.dll .\target\release\*.exe
