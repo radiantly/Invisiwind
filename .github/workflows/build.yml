@@ -3,6 +3,16 @@ name: Build App
 on: [push]
 
 jobs:
+  build-arm:
+    runs-on: windows-11-arm
+    continue-on-error: true
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: cargo build --release
+
   build:
     runs-on: windows-latest
 
@@ -10,12 +20,15 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build Project
+      - name: Build amd64
+        run: cargo build --release
+
+      - name: Build x86
         run: |
-          cargo build --release
+          rustup target add i686-pc-windows-msvc
           cargo build --release -p payload --target i686-pc-windows-msvc
 
-      - name: Copy 32-bit binaries
+      - name: Copy x86 binaries
         shell: powershell
         run: Copy-Item -Path .\target\i686-pc-windows-msvc\release\utils.dll -Destination .\target\release\utils32.dll
 
