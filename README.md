@@ -23,12 +23,12 @@ Simple: The tool performs dll injection to [SetWindowDisplayAffinity](https://do
 
 ## How do I install it?
 
-<img align="right" src="Misc/screenshot-light.png">
-
 > [!NOTE]  
 > This software may be detected as a virus/trojan by your antivirus due to the fact that it performs dll injection. This is a false positive and can be safely ignored.
 
 To use this application, you can either use the installer or the portable version.
+
+<img align="right" src="Misc/screenshot-light.png">
 
 ### Use the installer (recommended)
 

@@ -3,37 +3,57 @@ name: Build App
 on: [push]
 
 jobs:
-  build-arm:
-    runs-on: windows-11-arm
-    continue-on-error: true
+  build:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+          - target: i686-pc-windows-msvc
+            prefix: _32bit
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build
-        run: cargo build --release
+      - name: Build project
+        run: |
+          rustup target add ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }}
 
-  build:
+      - name: Add prefix
+        if: matrix.prefix
+        shell: powershell
+        run: |
+          $binaries = Get-ChildItem -Path .\target\${{ matrix.target }}\release\* -Include *.dll,*.exe
+          $binaries | Rename-Item -NewName { $_.Name + "${{ matrix.prefix }}" };
+
+      - name: Upload ${{ matrix.target }} artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-binaries
+          path: |
+            target/${{ matrix.target }}/release/*.exe
+            target/${{ matrix.target }}/release/*.dll
+          if-no-files-found: error
+
+  release:
     runs-on: windows-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build amd64
-        run: cargo build --release
-
-      - name: Build x86
-        run: |
-          rustup target add i686-pc-windows-msvc
-          cargo build --release -p payload --target i686-pc-windows-msvc
-
-      - name: Copy x86 binaries
-        shell: powershell
-        run: Copy-Item -Path .\target\i686-pc-windows-msvc\release\utils.dll -Destination .\target\release\utils32.dll
+      - name: Download build artifacts
+        uses: actions/download-artifact@v5
+        with:
+          pattern: "*-binaries"
+          path: dist
+          merge-multiple: true
 
       - name: Generate zip bundle
-        run: 7z a -tzip Invisiwind.zip .\hide.ahk .\target\release\*.dll .\target\release\*.exe
+        run: 7z a -tzip Invisiwind.zip .\hide.ahk .\dist\*.dll .\dist\*.exe
 
       - name: Build Installer
         run: iscc .\Misc\inno.iss
