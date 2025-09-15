@@ -8,4 +8,4 @@ name = "utils"
 crate-type = ["cdylib"]
 
 [dependencies]
-windows = { version = "0.61.3", features = ["Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62.0", features = ["Win32_UI_WindowsAndMessaging"] }

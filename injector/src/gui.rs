@@ -60,14 +60,15 @@ impl GraphicsCaptureApiHandler for ScreenCapture {
 
         let width = frame.width();
         let height = frame.height();
-        if let Ok(mut buffer) = frame.buffer() {
-            if let Ok(no_pad_buffer) = buffer.as_nopadding_buffer() {
-                let img = ColorImage::from_rgba_unmultiplied(
-                    [width as usize, height as usize],
-                    &no_pad_buffer,
-                );
-                let _ = self.capture_send.try_send(img);
-            }
+        if let Ok(buffer) = frame.buffer() {
+            // TODO: check if perf can be improved here
+            let mut no_pad_buffer = Vec::new();
+            let no_pad_buffer = buffer.as_nopadding_buffer(&mut no_pad_buffer)?;
+            let img = ColorImage::from_rgba_unmultiplied(
+                [width as usize, height as usize],
+                &no_pad_buffer,
+            );
+            let _ = self.capture_send.try_send(img);
         }
         Ok(())
     }

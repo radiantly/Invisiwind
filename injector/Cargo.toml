@@ -4,15 +4,15 @@ version = "2.0.0"
 edition = "2024"
 
 [dependencies]
-clap = { version = "4.5.43", features = ["derive"] }
+clap = { version = "4.5.47", features = ["derive"] }
 crossbeam-channel = "0.5.15"
 dll-syringe = { version = "0.17.0", features = ["into-x86-from-x64", "rpc-raw"] }
-eframe = { version = "0.32.0", features = ["wgpu"] }
-egui_extras = "0.32.0"
-image = { version = "0.25.6", default-features = false, features = ["ico"]}
+eframe = { version = "0.32.3", features = ["wgpu"] }
+egui_extras = "0.32.3"
+image = { version = "0.25.8", default-features = false, features = ["ico"]}
 wgpu = { version = "25.0.0", default-features = true }
-windows = { version = "0.61.3", features = ["Win32_UI_WindowsAndMessaging" , "Win32_Graphics_Dwm", "Win32_System_Console"] }
-windows-capture = "1.5.0"
+windows = { version = "0.62.0", features = ["Win32_UI_WindowsAndMessaging" , "Win32_Graphics_Dwm", "Win32_System_Console"] }
+windows-capture = { git = "https://github.com/NiiightmareXD/windows-capture" }
 
 [build-dependencies]
 winresource = "0.1.23"
