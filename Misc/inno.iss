@@ -5,15 +5,7 @@
 #define MyAppVersion "2.0.0"
 #define MyAppPublisher "Radiantly"
 #define MyAppURL "https://github.com/radiantly/Invisiwind"
-
-[Code]
-function MyAppExeName(Param: String): String;
-begin
-  if IsWin64 then 
-    Result := 'Invisiwind.exe'
-  else 
-    Result := 'Invisiwind_32bit.exe';
-end;
+#define MyAppExeName "Invisiwind.exe"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -27,17 +19,21 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
+UninstallDisplayIcon={app}\{#MyAppExeName}
+; "ArchitecturesAllowed=x64compatible" specifies that Setup cannot run
+; on anything but x64 and Windows 11 on Arm.
+ArchitecturesAllowed=x64compatible
+; "ArchitecturesInstallIn64BitMode=x64compatible" requests that the
+; install be done in "64-bit mode" on x64 or Windows 11 on Arm,
+; meaning it should use the native 64-bit Program Files directory and
+; the 64-bit view of the registry.
+ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputBaseFilename=InvisiwindInstaller
-Compression=lzma
-SolidCompression=yes
 WizardStyle=modern
-; Custom install options
-ArchitecturesInstallIn64BitMode=x64
-SetupIconFile=invicon.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -46,8 +42,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\target\release\*.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\target\release\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\*.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{code:MyAppExeName}"
