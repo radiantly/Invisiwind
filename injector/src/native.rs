@@ -5,6 +5,7 @@ use dll_syringe::{
 };
 use std::error;
 use std::{env, path::PathBuf};
+use tracing::debug;
 use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, TRUE, WPARAM},
@@ -32,17 +33,18 @@ pub struct WindowInfo {
     pub hidden: bool,
 }
 
+#[tracing::instrument]
 pub fn get_icon(hwnd: u32) -> Option<(usize, usize, Vec<u8>)> {
     let hwnd = HWND(hwnd.clone() as *mut _);
     let lresult =
         unsafe { SendMessageW(hwnd, WM_GETICON, Some(WPARAM(ICON_SMALL2 as usize)), None) };
 
     let hicon = if lresult.0 == 0 {
-        println!("- no hicon from sendmessage");
+        debug!("no hicon from sendmessage");
 
         let uresult = unsafe { GetClassLongPtrW(hwnd, GCLP_HICONSM) };
         if uresult == 0 {
-            println!("- no hicon from getclasslongptrsm");
+            debug!("no hicon from getclasslongptrsm");
             return None;
         }
         HICON(uresult as *mut _)
@@ -53,13 +55,13 @@ pub fn get_icon(hwnd: u32) -> Option<(usize, usize, Vec<u8>)> {
     let mut icon_info = ICONINFO::default();
     let info_result = unsafe { GetIconInfo(hicon, &mut icon_info as *mut _) };
     if let Err(err) = info_result {
-        println!("- no iconinfo retrieved {:?}", err);
+        debug!("no iconinfo retrieved {:?}", err);
         return None;
     }
 
     let hdc = unsafe { GetDC(None) };
     if hdc.is_invalid() {
-        println!("- no dc");
+        debug!("no dc");
         return None;
     }
 
@@ -71,8 +73,9 @@ pub fn get_icon(hwnd: u32) -> Option<(usize, usize, Vec<u8>)> {
             Some(&mut bitmap as *mut _ as *mut _),
         )
     };
+
     if object_result == 0 {
-        println!("no object");
+        debug!("no object");
         return None;
     }
 
@@ -139,6 +142,8 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL 
         )
     };
 
+    debug!("Window {:?} {:?} {:?}", hwnd.0, cloaked, title);
+
     if result_get.is_err() || cloaked != 0 {
         return TRUE;
     }
@@ -171,6 +176,7 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL 
     TRUE // continue enumeration
 }
 
+#[tracing::instrument]
 pub fn get_top_level_windows() -> Vec<WindowInfo> {
     let mut top_level_windows = Vec::new();
 

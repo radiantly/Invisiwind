@@ -13,6 +13,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use std::{io::Cursor, mem};
+use tracing::{debug, error, info};
 use windows_capture::{
     capture::{CaptureControl, Context, GraphicsCaptureApiHandler},
     frame::Frame,
@@ -63,7 +64,7 @@ impl GraphicsCaptureApiHandler for ScreenCapture {
         if let Ok(buffer) = frame.buffer() {
             // TODO: check if perf can be improved here
             let mut no_pad_buffer = Vec::new();
-            let no_pad_buffer = buffer.as_nopadding_buffer(&mut no_pad_buffer)?;
+            let no_pad_buffer = buffer.as_nopadding_buffer(&mut no_pad_buffer);
             let img = ColorImage::from_rgba_unmultiplied(
                 [width as usize, height as usize],
                 &no_pad_buffer,
@@ -98,20 +99,20 @@ impl Gui {
             for event in receiver {
                 match event {
                     InjectorWorkerEvent::Update => {
-                        println!("populating");
+                        debug!("populating");
                         let mut w = native::get_top_level_windows();
                         *windows_copy.lock().unwrap() = mem::take(&mut w);
-                        println!("populating done");
+                        debug!("populating done");
                     }
                     InjectorWorkerEvent::PerformOp(pid, hwnd, hide_window, hide_from_taskbar) => {
-                        println!("performing on op on {:?}", hwnd);
+                        info!("performing on op on {:?}", hwnd);
                         if let Err(error) = native::Injector::set_window_props_with_pid(
                             pid,
                             hwnd,
                             hide_window,
                             hide_from_taskbar,
                         ) {
-                            println!("Failed: {:?}", error);
+                            error!("Failed: {:?}", error);
                         }
                     }
                 }
@@ -245,7 +246,7 @@ impl eframe::App for Gui {
         for event in ctx.input(|i| i.events.clone()) {
             if let egui::Event::WindowFocused(focused) = event {
                 if focused {
-                    println!("focused");
+                    debug!("focused");
                     self.event_sender.send(InjectorWorkerEvent::Update).unwrap();
                     if self.show_desktop_preview {
                         let _ = self.capture_event_send.send(CaptureWorkerEvent::Capture(
