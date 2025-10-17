@@ -3,15 +3,8 @@ name: Build App
 on: [push]
 
 jobs:
-  build:
+  build32:
     runs-on: windows-latest
-
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-pc-windows-msvc
-          - target: i686-pc-windows-msvc
-            prefix: _32bit
 
     steps:
       - name: Checkout Code
@@ -19,27 +12,42 @@ jobs:
 
       - name: Build project
         run: |
-          rustup target add ${{ matrix.target }}
-          cargo build --release --target ${{ matrix.target }}
+          rustup target add i686-pc-windows-msvc
+          cargo build -p payload --release --target i686-pc-windows-msvc
 
-      - name: Add prefix
-        if: matrix.prefix
+      - name: Rename 32-bit dll
         shell: powershell
-        run: |
-          $binaries = Get-ChildItem -Path .\target\${{ matrix.target }}\release\* -Include *.dll,*.exe
-          $binaries | Rename-Item -NewName { $_.Name + "${{ matrix.prefix }}" };
+        run: Rename-Item -Path .\target\i686-pc-windows-msvc\release\utils.dll -NewName utils32.dll
 
       - name: Upload ${{ matrix.target }} artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}-binaries
+          name: x86-binaries
+          path: target/i686-pc-windows-msvc/release/utils32.dll
+          if-no-files-found: error
+
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build project
+        run: cargo build --release
+
+      - name: Upload built binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: x64-binaries
           path: |
-            target/${{ matrix.target }}/release/*.exe
-            target/${{ matrix.target }}/release/*.dll
+            target/release/*.exe
+            target/release/*.dll
           if-no-files-found: error
 
   release:
     runs-on: windows-latest
+    needs: [build, build32]
 
     steps:
       - name: Checkout Code
