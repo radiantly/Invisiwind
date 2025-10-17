@@ -63,6 +63,10 @@ jobs:
       - name: Generate zip bundle
         run: 7z a -tzip Invisiwind.zip .\hide.ahk .\dist\*.dll .\dist\*.exe
 
+      - name: Install InnoSetup
+        shell: cmd
+        run: choco upgrade innosetup -y --no-progress
+
       - name: Build Installer
         run: iscc .\Misc\inno.iss
 
