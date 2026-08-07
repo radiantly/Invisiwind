@@ -5,7 +5,7 @@
 #define MyAppVersion "2.0.0"
 #define MyAppPublisher "Radiantly"
 #define MyAppURL "https://github.com/radiantly/Invisiwind"
-#define MyAppExeName "Invisiwind.exe"
+#define MyAppExeName "Invisiwind64.exe"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -43,7 +43,6 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "..\dist\*.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

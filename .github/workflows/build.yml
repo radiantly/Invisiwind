@@ -7,61 +7,62 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build project
         run: |
           rustup target add i686-pc-windows-msvc
-          cargo build -p payload --release --target i686-pc-windows-msvc
+          cargo build --release --target i686-pc-windows-msvc
 
-      - name: Rename 32-bit dll
+      - name: Rename x86 binary
         shell: powershell
-        run: Rename-Item -Path .\target\i686-pc-windows-msvc\release\utils.dll -NewName utils32.dll
+        run: Rename-Item -Path .\target\i686-pc-windows-msvc\release\Invisiwind.exe -NewName Invisiwind32.exe
 
-      - name: Upload ${{ matrix.target }} artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload x86 artifacts
+        uses: actions/upload-artifact@v7
         with:
           name: x86-binaries
-          path: target/i686-pc-windows-msvc/release/utils32.dll
+          path: target/i686-pc-windows-msvc/release/Invisiwind32.exe
           if-no-files-found: error
 
-  build:
+  build64:
     runs-on: windows-latest
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build project
         run: cargo build --release
 
-      - name: Upload built binaries
-        uses: actions/upload-artifact@v4
+      - name: Rename x64 binary
+        shell: powershell
+        run: Rename-Item -Path .\target\release\Invisiwind.exe -NewName Invisiwind64.exe
+
+      - name: Upload 64 artifacts
+        uses: actions/upload-artifact@v7
         with:
           name: x64-binaries
-          path: |
-            target/release/*.exe
-            target/release/*.dll
+          path: target/release/Invisiwind64.exe
           if-no-files-found: error
 
   release:
     runs-on: windows-latest
-    needs: [build, build32]
+    needs: [build64, build32]
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: "*-binaries"
           path: dist
           merge-multiple: true
 
       - name: Generate zip bundle
-        run: 7z a -tzip Invisiwind.zip .\hide.ahk .\dist\*.dll .\dist\*.exe
+        run: 7z a -tzip Invisiwind.zip .\hide.ahk .\dist\*.exe
 
       - name: Install InnoSetup
         shell: cmd
@@ -71,7 +72,7 @@ jobs:
         run: iscc .\Misc\inno.iss
 
       - name: Publish latest pre-release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: latest
           prerelease: true
@@ -82,7 +83,7 @@ jobs:
 
       - if: startsWith(github.ref, 'refs/tags/v')
         name: Publish tagged release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           make_latest: true
           generate_release_notes: true
