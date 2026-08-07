@@ -174,7 +174,7 @@ impl Gui {
 
     fn get_icon<'a>(
         icon_cache: &'a mut HashMap<(u32, u32), Option<egui::TextureHandle>>,
-        ctx: &egui::Context,
+        ui: &egui::Ui,
         pid: u32,
         hwnd: u32,
     ) -> &'a Option<egui::TextureHandle> {
@@ -182,7 +182,7 @@ impl Gui {
             let icon = match native::get_icon(hwnd) {
                 Some((width, height, buffer)) => {
                     let image = ColorImage::from_rgba_unmultiplied([width, height], &buffer);
-                    Some(ctx.load_texture("icon", image, egui::TextureOptions::LINEAR))
+                    Some(ui.load_texture("icon", image, egui::TextureOptions::LINEAR))
                 }
                 None => None,
             };
@@ -233,9 +233,9 @@ impl Gui {
 }
 
 impl eframe::App for Gui {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // graceful close
-        if ctx.input(|i| i.viewport().close_requested()) {
+        if ui.input(|i| i.viewport().close_requested()) {
             let _ = self
                 .capture_event_send
                 .send(CaptureWorkerEvent::StopCapture);
@@ -243,7 +243,7 @@ impl eframe::App for Gui {
         }
 
         // check if focus has changed
-        for event in ctx.input(|i| i.events.clone()) {
+        for event in ui.input(|i| i.events.clone()) {
             if let egui::Event::WindowFocused(focused) = event {
                 if focused {
                     debug!("focused");
@@ -261,12 +261,12 @@ impl eframe::App for Gui {
             }
         }
 
-        let theme = ctx.theme();
-        let focused = ctx.input(|i| i.focused);
+        let theme = ui.theme();
+        let focused = ui.input(|i| i.focused);
 
         egui::CentralPanel::default()
-            .frame(egui::Frame::central_panel(&ctx.style()).inner_margin(Margin::same(14)))
-            .show(ctx, |ui| {
+            .frame(egui::Frame::central_panel(&ui.style()).inner_margin(Margin::same(14)))
+            .show(ui, |ui| {
                 if !focused {
                     ui.with_layout(
                         Layout::centered_and_justified(Direction::LeftToRight),
@@ -290,13 +290,13 @@ impl eframe::App for Gui {
                             if let Some(texture_handle) = &mut self.capture_tex {
                                 texture_handle.set(img, egui::TextureOptions::LINEAR);
                             } else {
-                                self.capture_tex = Some(ctx.load_texture(
+                                self.capture_tex = Some(ui.load_texture(
                                     "screen_capture",
                                     img,
                                     egui::TextureOptions::LINEAR,
                                 ));
                             }
-                            ctx.request_repaint();
+                            ui.request_repaint();
                         }
 
                         if let Some(tex) = &self.capture_tex {
@@ -336,7 +336,7 @@ impl eframe::App for Gui {
 
                         let icon_atom = if let Some(texture) = Gui::get_icon(
                             &mut self.icon_cache,
-                            ctx,
+                            ui,
                             window_info.pid,
                             window_info.hwnd,
                         ) {
