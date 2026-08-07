@@ -2,10 +2,10 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Invisiwind"
-#define MyAppVersion "2.0.0"
 #define MyAppPublisher "Radiantly"
 #define MyAppURL "https://github.com/radiantly/Invisiwind"
 #define MyAppExeName "Invisiwind64.exe"
+#define MyAppVersion GetStringFileInfo(SourcePath + "..\dist\" + MyAppExeName, PRODUCT_VERSION)
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -13,6 +13,7 @@
 AppId={{32D1543D-4B92-4705-85F0-15EC0AD3AC42}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppVersion}
 ;AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}

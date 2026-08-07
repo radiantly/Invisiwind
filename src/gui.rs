@@ -407,7 +407,7 @@ pub fn start() {
 
     // load icon
     if let Ok(d_image) = ImageReader::with_format(
-        Cursor::new(include_bytes!("../../Misc/invicon.ico")),
+        Cursor::new(include_bytes!("../Misc/invicon.ico")),
         ImageFormat::Ico,
     )
     .decode()
@@ -432,7 +432,7 @@ pub fn start() {
             fonts.font_data.insert(
                 "Inter_18pt-Regular".to_owned(),
                 Arc::new(FontData::from_static(include_bytes!(
-                    "../../Misc/fonts/Inter_18pt-Regular.ttf"
+                    "../Misc/fonts/Inter_18pt-Regular.ttf"
                 ))),
             );
 
@@ -444,7 +444,7 @@ pub fn start() {
             fonts.font_data.insert(
                 "Inter_18pt-Bold".to_owned(),
                 Arc::new(FontData::from_static(include_bytes!(
-                    "../../Misc/fonts/Inter_18pt-Bold.ttf"
+                    "../Misc/fonts/Inter_18pt-Bold.ttf"
                 ))),
             );
 

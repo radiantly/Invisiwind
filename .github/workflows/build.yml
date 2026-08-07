@@ -18,8 +18,7 @@ jobs:
         shell: powershell
         run: Rename-Item -Path .\target\i686-pc-windows-msvc\release\Invisiwind.exe -NewName Invisiwind32.exe
 
-      - name: Upload x86 artifacts
-        uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7
         with:
           name: x86-binaries
           path: target/i686-pc-windows-msvc/release/Invisiwind32.exe
@@ -29,8 +28,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
 
       - name: Build project
         run: cargo build --release
@@ -39,8 +37,7 @@ jobs:
         shell: powershell
         run: Rename-Item -Path .\target\release\Invisiwind.exe -NewName Invisiwind64.exe
 
-      - name: Upload 64 artifacts
-        uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7
         with:
           name: x64-binaries
           path: target/release/Invisiwind64.exe
